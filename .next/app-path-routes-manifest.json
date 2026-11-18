@@ -1,0 +1,18 @@
+{
+  "/api/auth/logout/route": "/api/auth/logout",
+  "/api/auth/me/route": "/api/auth/me",
+  "/api/auth/gate-check/route": "/api/auth/gate-check",
+  "/api/inventory/route": "/api/inventory",
+  "/api/inventory/transfer/route": "/api/inventory/transfer",
+  "/api/transactions/[ticketId]/pickup/route": "/api/transactions/[ticketId]/pickup",
+  "/api/transactions/[ticketId]/approve/route": "/api/transactions/[ticketId]/approve",
+  "/api/transactions/[ticketId]/return/route": "/api/transactions/[ticketId]/return",
+  "/api/transactions/route": "/api/transactions",
+  "/api/monitoring/route": "/api/monitoring",
+  "/api/users/route": "/api/users",
+  "/_not-found/page": "/_not-found",
+  "/admin/page": "/admin",
+  "/page": "/",
+  "/user/page": "/user",
+  "/supervisor/page": "/supervisor"
+}
