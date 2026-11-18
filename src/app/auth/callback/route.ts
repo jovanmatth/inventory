@@ -1,0 +1,98 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { userRepo } from '@/lib/data-provider';
+
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get('code');
+  const origin = requestUrl.origin;
+
+  if (!code) {
+    return NextResponse.redirect(`${origin}/?error=NO_CODE`);
+  }
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hiezrrvpkwsegeexgwsf.supabase.co',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Handled in server components
+          }
+        },
+      },
+    }
+  );
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error || !data.user) {
+    console.error('Supabase Auth exchange error:', error);
+    return NextResponse.redirect(
+      `${origin}/?error=AUTH_ERROR&message=${encodeURIComponent(error?.message || 'Gagal verifikasi session')}`
+    );
+  }
+
+  const googleEmail = data.user.email?.toLowerCase().trim();
+  const googleName = data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'User';
+
+  if (!googleEmail) {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(`${origin}/?error=NO_EMAIL`);
+  }
+
+  // ==========================================
+  // GATE CHECK 1: Domain Validation
+  // ==========================================
+  const requiredDomain = '@mutiarabangsa.sch.id';
+  if (!googleEmail.endsWith(requiredDomain)) {
+    // Access Denied: Domain Tidak Valid
+    await supabase.auth.signOut();
+    return NextResponse.redirect(
+      `${origin}/?error=INVALID_DOMAIN&email=${encodeURIComponent(googleEmail)}`
+    );
+  }
+
+  // ==========================================
+  // GATE CHECK 2: Whitelist Validation
+  // ==========================================
+  const dbUser = await userRepo.getByEmail(googleEmail);
+  if (!dbUser) {
+    // Access Denied: Email tidak ada di Whitelist
+    await supabase.auth.signOut();
+    return NextResponse.redirect(
+      `${origin}/?error=NOT_WHITELISTED&email=${encodeURIComponent(googleEmail)}`
+    );
+  }
+
+  // ==========================================
+  // AUTHENTICATION SUCCESS: Role Routing
+  // ==========================================
+  let redirectPath = '/user';
+  if (dbUser.role === 'Admin') {
+    redirectPath = '/admin';
+  } else if (dbUser.role === 'Supervisor') {
+    redirectPath = '/supervisor';
+  }
+
+  const response = NextResponse.redirect(`${origin}${redirectPath}`);
+
+  // Set persistent session cookie for PIGEON app shell
+  response.cookies.set('pigeon_user_id', dbUser.user_id, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    httpOnly: false,
+  });
+
+  return response;
+}
