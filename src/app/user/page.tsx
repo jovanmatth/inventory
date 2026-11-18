@@ -197,7 +197,8 @@ function UserDashboardContent() {
   });
 
   return (
-    <AppShell activeMenu={
+    <>
+      <AppShell activeMenu={
       activeTab === 'inventory' ? 'Katalog Barang (Lab 1 & 2)' :
       activeTab === 'borrow' ? 'Peminjaman Langsung' :
       activeTab === 'reserve' ? 'Reservasi Terjadwal' :
@@ -635,27 +636,36 @@ function UserDashboardContent() {
           </div>
         </div>
       )}
+      </AppShell>
 
-      {/* TICKET MODAL */}
+      {/* TICKET MODAL - MOVED OUTSIDE APPSHELL WITH Z-[9999] AND DUAL POINTER/CLICK EVENTS */}
       {selectedTicket && (
         <div
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedTicket(null);
+          }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedTicket(null);
           }}
-          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             className="relative bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center my-auto"
           >
             {/* Top Right Close Button */}
             <button
               type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setSelectedTicket(null);
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedTicket(null);
               }}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer z-10"
               title="Tutup (ESC)"
             >
               <X className="w-5 h-5" />
@@ -686,6 +696,12 @@ function UserDashboardContent() {
             {selectedTicket.status !== 'Picked_Up' && (
               <button
                 type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  const target = selectedTicket;
+                  setSelectedTicket(null);
+                  setTicketToDelete(target);
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   const target = selectedTicket;
@@ -701,11 +717,15 @@ function UserDashboardContent() {
 
             <button
               type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setSelectedTicket(null);
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedTicket(null);
               }}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-sm"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-sm select-none"
             >
               Tutup Tiket
             </button>
@@ -716,21 +736,32 @@ function UserDashboardContent() {
       {/* MODAL: DELETE / CANCEL TICKET CONFIRMATION */}
       {ticketToDelete && (
         <div
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) setTicketToDelete(null);
+          }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setTicketToDelete(null);
           }}
-          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             className="relative bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center my-auto"
           >
             {/* Top Right Close Button */}
             <button
               type="button"
               disabled={deletingTicket}
-              onClick={() => setTicketToDelete(null)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setTicketToDelete(null);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setTicketToDelete(null);
+              }}
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer z-10"
               title="Tutup (ESC)"
             >
               <X className="w-4 h-4" />
@@ -748,6 +779,7 @@ function UserDashboardContent() {
               <button
                 type="button"
                 disabled={deletingTicket}
+                onPointerDown={() => setTicketToDelete(null)}
                 onClick={() => setTicketToDelete(null)}
                 className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
               >
@@ -765,7 +797,7 @@ function UserDashboardContent() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
 
