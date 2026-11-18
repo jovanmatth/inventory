@@ -26,6 +26,56 @@ import {
 } from 'lucide-react';
 import { InventoryItem, BorrowingTransaction, User } from '@/types';
 
+// Helper to auto-calculate due date based on duration
+const calculateDueDate = (dur: string): string => {
+  const now = new Date();
+
+  // Hari
+  const dayMatch = dur.match(/(\d+)\s*Hari/i);
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1], 10);
+    const target = new Date(now);
+    target.setDate(target.getDate() + days);
+    target.setHours(23, 59, 0, 0);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}T23:59`;
+  }
+
+  // Jam
+  const hourMatch = dur.match(/(\d+)\s*Jam/i);
+  if (hourMatch) {
+    const hours = parseInt(hourMatch[1], 10);
+    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    const h = String(target.getHours()).padStart(2, '0');
+    const m = String(target.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${date}T${h}:${m}`;
+  }
+
+  // Hari Ini EOD
+  if (dur.toLowerCase().includes('hari ini')) {
+    const target = new Date(now);
+    target.setHours(23, 59, 0, 0);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}T23:59`;
+  }
+
+  // Default fallback: 1 day at 23:59
+  const target = new Date(now);
+  target.setDate(target.getDate() + 1);
+  target.setHours(23, 59, 0, 0);
+  const year = target.getFullYear();
+  const month = String(target.getMonth() + 1).padStart(2, '0');
+  const date = String(target.getDate()).padStart(2, '0');
+  return `${year}-${month}-${date}T23:59`;
+};
+
 function UserDashboardContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'borrow';
@@ -41,8 +91,14 @@ function UserDashboardContent() {
   const [cart, setCart] = useState<{ item: InventoryItem; qty: number }[]>([]);
   const [purpose, setPurpose] = useState('');
   const [duration, setDuration] = useState('1 Hari');
-  const [returnDate, setReturnDate] = useState('');
+  const [returnDate, setReturnDate] = useState(() => calculateDueDate('1 Hari'));
   const [transactionType, setTransactionType] = useState<'Direct_Borrow' | 'Reservation'>('Direct_Borrow');
+
+  const handleDurationChange = (newDur: string) => {
+    setDuration(newDur);
+    const autoDue = calculateDueDate(newDur);
+    setReturnDate(autoDue);
+  };
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,7 +237,8 @@ function UserDashboardContent() {
       showNotification(data.message);
       setCart([]);
       setPurpose('');
-      setReturnDate('');
+      setDuration('1 Hari');
+      setReturnDate(calculateDueDate('1 Hari'));
       setRefreshTrigger((v) => v + 1);
       setActiveTab('tickets');
       broadcastDataChange();
@@ -453,26 +510,64 @@ function UserDashboardContent() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi Pinjam:</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Contoh: 1 Hari / 3 Jam"
+                      <select
                         value={duration}
-                        onChange={(e) => setDuration(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
-                      />
+                        onChange={(e) => handleDurationChange(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-medium cursor-pointer"
+                      >
+                        <optgroup label="Pilihan Hari (Jatuh Tempo 23:59)">
+                          <option value="1 Hari">1 Hari (Besok 23:59)</option>
+                          <option value="2 Hari">2 Hari</option>
+                          <option value="3 Hari">3 Hari</option>
+                          <option value="4 Hari">4 Hari</option>
+                          <option value="5 Hari">5 Hari (1 Pekan Kerja)</option>
+                          <option value="7 Hari">7 Hari (1 Minggu)</option>
+                          <option value="14 Hari">14 Hari (2 Minggu)</option>
+                        </optgroup>
+                        <optgroup label="Pilihan Jam (Hari Ini)">
+                          <option value="1 Jam">1 Jam</option>
+                          <option value="2 Jam">2 Jam</option>
+                          <option value="3 Jam">3 Jam</option>
+                          <option value="4 Jam">4 Jam</option>
+                          <option value="6 Jam">6 Jam</option>
+                          <option value="Hari Ini (23:59)">Hari Ini (s/d 23:59)</option>
+                        </optgroup>
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kembali:</label>
                       <input
-                        type="date"
+                        type="datetime-local"
                         required
                         value={returnDate}
                         onChange={(e) => setReturnDate(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-mono"
                       />
                     </div>
                   </div>
+
+                  {returnDate && (
+                    <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-1.5 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>
+                        Jatuh Tempo:{' '}
+                        <strong className="text-emerald-950 font-bold">
+                          {new Date(returnDate).toLocaleDateString('id-ID', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}{' '}
+                          pukul{' '}
+                          {new Date(returnDate).toLocaleTimeString('id-ID', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}{' '}
+                          WIB
+                        </strong>
+                      </span>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
@@ -704,7 +799,24 @@ function UserDashboardContent() {
             <div className="my-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-2">
               <p><span className="text-slate-500">Peminjam:</span> <span className="font-bold text-slate-800">{selectedTicket.user_name}</span></p>
               <p><span className="text-slate-500">Tujuan:</span> {selectedTicket.purpose}</p>
-              <p><span className="text-slate-500">Batas Pengembalian:</span> <span className="font-bold text-red-600">{selectedTicket.expected_return_date ? new Date(selectedTicket.expected_return_date).toLocaleDateString('id-ID') : 'Selesai Pakai'}</span></p>
+              <p>
+                <span className="text-slate-500">Batas Pengembalian:</span>{' '}
+                <span className="font-bold text-red-600">
+                  {selectedTicket.expected_return_date
+                    ? (() => {
+                        const d = new Date(selectedTicket.expected_return_date);
+                        const formattedDate = d.toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        });
+                        const hours = String(d.getHours()).padStart(2, '0');
+                        const minutes = String(d.getMinutes()).padStart(2, '0');
+                        return `${formattedDate} (${hours}:${minutes} WIB)`;
+                      })()
+                    : 'Selesai Pakai'}
+                </span>
+              </p>
               <div className="pt-2 border-t">
                 <p className="font-bold text-slate-700 mb-1">Barang Tertera:</p>
                 {selectedTicket.items?.map((it) => (

@@ -30,6 +30,56 @@ import {
   ResolutionStatus,
 } from '@/types';
 
+// Helper to auto-calculate due date based on duration
+const calculateDueDate = (dur: string): string => {
+  const now = new Date();
+
+  // Hari
+  const dayMatch = dur.match(/(\d+)\s*Hari/i);
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1], 10);
+    const target = new Date(now);
+    target.setDate(target.getDate() + days);
+    target.setHours(23, 59, 0, 0);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}T23:59`;
+  }
+
+  // Jam
+  const hourMatch = dur.match(/(\d+)\s*Jam/i);
+  if (hourMatch) {
+    const hours = parseInt(hourMatch[1], 10);
+    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    const h = String(target.getHours()).padStart(2, '0');
+    const m = String(target.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${date}T${h}:${m}`;
+  }
+
+  // Hari Ini EOD
+  if (dur.toLowerCase().includes('hari ini')) {
+    const target = new Date(now);
+    target.setHours(23, 59, 0, 0);
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const date = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}T23:59`;
+  }
+
+  // Default fallback: 1 day at 23:59
+  const target = new Date(now);
+  target.setDate(target.getDate() + 1);
+  target.setHours(23, 59, 0, 0);
+  const year = target.getFullYear();
+  const month = String(target.getMonth() + 1).padStart(2, '0');
+  const date = String(target.getDate()).padStart(2, '0');
+  return `${year}-${month}-${date}T23:59`;
+};
+
 function SupervisorDashboardContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'overview';
@@ -44,9 +94,15 @@ function SupervisorDashboardContent() {
   // Cart for borrowing / reservation
   const [cart, setCart] = useState<{ item: InventoryItem; qty: number }[]>([]);
   const [borrowPurpose, setBorrowPurpose] = useState('');
-  const [borrowDuration, setBorrowDuration] = useState('2 Hari');
-  const [borrowReturnDate, setBorrowReturnDate] = useState('');
+  const [borrowDuration, setBorrowDuration] = useState('1 Hari');
+  const [borrowReturnDate, setBorrowReturnDate] = useState(() => calculateDueDate('1 Hari'));
   const [borrowType, setBorrowType] = useState<'Direct_Borrow' | 'Reservation'>('Direct_Borrow');
+
+  const handleSupervisorDurationChange = (newDur: string) => {
+    setBorrowDuration(newDur);
+    const autoDue = calculateDueDate(newDur);
+    setBorrowReturnDate(autoDue);
+  };
 
   // Approval state
   const [rejectModalTx, setRejectModalTx] = useState<BorrowingTransaction | null>(null);
@@ -157,7 +213,8 @@ function SupervisorDashboardContent() {
       showNotification(data.message);
       setCart([]);
       setBorrowPurpose('');
-      setBorrowReturnDate('');
+      setBorrowDuration('1 Hari');
+      setBorrowReturnDate(calculateDueDate('1 Hari'));
       setRefreshTrigger((v) => v + 1);
       broadcastDataChange();
     } catch (err: any) {
@@ -571,25 +628,65 @@ function SupervisorDashboardContent() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi:</label>
-                    <input
-                      type="text"
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi Pinjam:</label>
+                    <select
                       value={borrowDuration}
-                      onChange={(e) => setBorrowDuration(e.target.value)}
-                      placeholder="Contoh: 3 Hari"
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
-                    />
+                      onChange={(e) => handleSupervisorDurationChange(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-medium cursor-pointer"
+                    >
+                      <optgroup label="Pilihan Hari (Jatuh Tempo 23:59)">
+                        <option value="1 Hari">1 Hari (Besok 23:59)</option>
+                        <option value="2 Hari">2 Hari</option>
+                        <option value="3 Hari">3 Hari</option>
+                        <option value="4 Hari">4 Hari</option>
+                        <option value="5 Hari">5 Hari (1 Pekan Kerja)</option>
+                        <option value="7 Hari">7 Hari (1 Minggu)</option>
+                        <option value="14 Hari">14 Hari (2 Minggu)</option>
+                      </optgroup>
+                      <optgroup label="Pilihan Jam (Hari Ini)">
+                        <option value="1 Jam">1 Jam</option>
+                        <option value="2 Jam">2 Jam</option>
+                        <option value="3 Jam">3 Jam</option>
+                        <option value="4 Jam">4 Jam</option>
+                        <option value="6 Jam">6 Jam</option>
+                        <option value="Hari Ini (23:59)">Hari Ini (s/d 23:59)</option>
+                      </optgroup>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Jadwal Kembali:</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kembali:</label>
                     <input
-                      type="date"
+                      type="datetime-local"
+                      required
                       value={borrowReturnDate}
                       onChange={(e) => setBorrowReturnDate(e.target.value)}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-mono"
                     />
                   </div>
                 </div>
+
+                {borrowReturnDate && (
+                  <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-1.5 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      Jatuh Tempo:{' '}
+                      <strong className="text-emerald-950 font-bold">
+                        {new Date(borrowReturnDate).toLocaleDateString('id-ID', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}{' '}
+                        pukul{' '}
+                        {new Date(borrowReturnDate).toLocaleTimeString('id-ID', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}{' '}
+                        WIB
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
                 <button
                   type="submit"
