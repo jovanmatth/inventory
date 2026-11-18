@@ -3,6 +3,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { userRepo } from '@/lib/data-provider';
 
+const DEFAULT_SUPABASE_URL = 'https://hiezrrvpkwsegeexgwsf.supabase.co';
+const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZXpycnZwa3dzZWdlZXhnd3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5NzM3NjcsImV4cCI6MjExMDU0OTc2N30.1sJcxsL7hkg_gIfIqJpnNlWoAMdYNRJTW1RkruxFOvY';
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -14,8 +17,8 @@ export async function GET(request: NextRequest) {
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hiezrrvpkwsegeexgwsf.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY,
     {
       cookies: {
         getAll() {
