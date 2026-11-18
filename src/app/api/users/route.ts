@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userRepo } from '@/lib/db';
+import { userRepo } from '@/lib/data-provider';
 import { User } from '@/types';
 
 export async function GET() {
   try {
-    const users = userRepo.getAll();
+    const users = await userRepo.getAll();
     return NextResponse.json({ success: true, users });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = userRepo.getByEmail(trimmedEmail);
+    const existing = await userRepo.getByEmail(trimmedEmail);
     if (existing) {
       return NextResponse.json(
         { success: false, message: 'User dengan email ini sudah terdaftar di whitelist' },
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       restriction_end_date: restriction_end_date || null,
     };
 
-    userRepo.create(newUser);
+    await userRepo.create(newUser);
     return NextResponse.json({ success: true, message: 'User Added Successfully', user: newUser });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest) {
       restriction_end_date: restriction_end_date || null,
     };
 
-    userRepo.update(updatedUser);
+    await userRepo.update(updatedUser);
     return NextResponse.json({ success: true, message: 'User Data Updated', user: updatedUser });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -94,7 +94,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'User ID diperlukan' }, { status: 400 });
     }
 
-    userRepo.delete(id);
+    await userRepo.delete(id);
     return NextResponse.json({ success: true, message: 'User Deleted Successfully' });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

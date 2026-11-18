@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userRepo } from '@/lib/db';
+import { userRepo } from '@/lib/data-provider';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Gate Check 2: Whitelist Validation
-    const user = userRepo.getByEmail(trimmedEmail);
+    const user = await userRepo.getByEmail(trimmedEmail);
     if (!user) {
       return NextResponse.json(
         {

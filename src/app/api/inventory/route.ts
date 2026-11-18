@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { inventoryRepo, historyRepo } from '@/lib/db';
+import { inventoryRepo, historyRepo } from '@/lib/data-provider';
 import { InventoryItem } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const search = searchParams.get('search') || undefined;
 
-    const items = inventoryRepo.getAll({ location, status, search });
+    const items = await inventoryRepo.getAll({ location, status, search });
     return NextResponse.json({ success: true, items });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -55,11 +55,11 @@ export async function POST(request: NextRequest) {
       borrowing_type,
     };
 
-    inventoryRepo.create(newItem);
+    await inventoryRepo.create(newItem);
 
     // Audit log
     if (performed_by) {
-      historyRepo.log({
+      await historyRepo.log({
         log_id: `LOG-${Date.now()}`,
         item_id: newItem.item_id,
         action_type: 'Stock_In',
@@ -95,7 +95,7 @@ export async function PUT(request: NextRequest) {
       performed_by,
     } = body;
 
-    const existing = inventoryRepo.getById(item_id);
+    const existing = await inventoryRepo.getById(item_id);
     if (!existing) {
       return NextResponse.json({ success: false, message: 'Barang tidak ditemukan' }, { status: 404 });
     }
@@ -116,11 +116,11 @@ export async function PUT(request: NextRequest) {
       borrowing_type,
     };
 
-    inventoryRepo.update(updatedItem);
+    await inventoryRepo.update(updatedItem);
 
     if (performed_by) {
       const diff = Number(qty) - existing.qty;
-      historyRepo.log({
+      await historyRepo.log({
         log_id: `LOG-${Date.now()}`,
         item_id,
         action_type: condition === 'Damaged' && existing.condition !== 'Damaged' ? 'Damaged' : 'Edited',
@@ -145,7 +145,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Item ID diperlukan' }, { status: 400 });
     }
 
-    inventoryRepo.delete(id);
+    await inventoryRepo.delete(id);
     return NextResponse.json({ success: true, message: 'Item Deleted Successfully' });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transactionRepo, inventoryRepo, userRepo } from '@/lib/db';
+import { transactionRepo, inventoryRepo, userRepo } from '@/lib/data-provider';
 import { BorrowingTransaction } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const userId = searchParams.get('user_id') || undefined;
 
-    const transactions = transactionRepo.getAll({ status, user_id: userId });
+    const transactions = await transactionRepo.getAll({ status, user_id: userId });
     return NextResponse.json({ success: true, transactions });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check user penalty status
-    const user = userRepo.getById(user_id);
+    const user = await userRepo.getById(user_id);
     if (!user) {
       return NextResponse.json({ success: false, message: 'User tidak ditemukan' }, { status: 404 });
     }
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     let hasLoanItem = false;
 
     for (const it of items) {
-      const dbItem = inventoryRepo.getById(it.item_id);
+      const dbItem = await inventoryRepo.getById(it.item_id);
       if (!dbItem) {
         return NextResponse.json({ success: false, message: `Barang dengan ID ${it.item_id} tidak ditemukan` }, { status: 404 });
       }
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       rejection_reason: null,
     };
 
-    const ticketId = transactionRepo.create(tx, preparedItems);
+    const ticketId = await transactionRepo.create(tx, preparedItems);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userRepo } from '@/lib/db';
+import { userRepo } from '@/lib/data-provider';
 
 export async function GET(request: NextRequest) {
   const userId = request.cookies.get('pigeon_user_id')?.value;
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false, user: null }, { status: 401 });
   }
 
-  const user = userRepo.getById(userId);
+  const user = await userRepo.getById(userId);
   if (!user) {
     return NextResponse.json({ authenticated: false, user: null }, { status: 401 });
   }

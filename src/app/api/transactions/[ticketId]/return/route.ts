@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transactionRepo, returnRepo, db, historyRepo, userRepo } from '@/lib/db';
+import { transactionRepo, returnRepo, historyRepo, userRepo, inventoryRepo } from '@/lib/data-provider';
 import { ReturnedCondition, ResolutionStatus } from '@/types';
 
 export async function POST(
@@ -17,7 +17,7 @@ export async function POST(
       custom_penalty_note,
     } = body;
 
-    const tx = transactionRepo.getByTicketId(ticketId);
+    const tx = await transactionRepo.getByTicketId(ticketId);
     if (!tx) {
       return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
     }
@@ -69,7 +69,7 @@ export async function POST(
 
     // Create return record
     const returnId = `RET-${Date.now()}`;
-    returnRepo.create({
+    await returnRepo.create({
       return_id: returnId,
       ticket_id: ticketId,
       return_date: actualReturnDate.toISOString(),
@@ -82,25 +82,25 @@ export async function POST(
     });
 
     // Update user penalty status if needed
-    const borrower = userRepo.getById(tx.user_id);
+    const borrower = await userRepo.getById(tx.user_id);
     if (borrower) {
       if (isLate && lateDays > 3) {
         const nextWeek = new Date();
         nextWeek.setDate(nextWeek.getDate() + 7);
-        userRepo.update({
+        await userRepo.update({
           ...borrower,
           penalty_status: 'Restricted_1_Week',
           restriction_end_date: nextWeek.toISOString(),
         });
       } else if ((isLate && lateDays >= 2) || finalResolution === 'Not_Resolved') {
-        userRepo.update({
+        await userRepo.update({
           ...borrower,
           penalty_status: 'Restricted_Temp',
           restriction_end_date: null,
         });
       } else if (isLate || returned_condition === 'Damaged_Light') {
         if (borrower.penalty_status === 'None') {
-          userRepo.update({
+          await userRepo.update({
             ...borrower,
             penalty_status: 'Warning',
           });
@@ -110,19 +110,22 @@ export async function POST(
 
     // Determine final transaction status
     const finalTxStatus = finalResolution === 'Resolved' ? 'Returned' : 'Issue_Reported';
-    transactionRepo.updateStatus(ticketId, finalTxStatus);
+    await transactionRepo.updateStatus(ticketId, finalTxStatus);
 
     // Restore stock for Loan items if condition is Good or Resolved
     if (finalResolution === 'Resolved' && returned_condition !== 'Lost' && returned_condition !== 'Damaged_Heavy') {
       if (tx.items) {
         for (const it of tx.items) {
           if (it.borrowing_type === 'Loan') {
-            db.prepare(`UPDATE Inventory SET qty = qty + ? WHERE item_id = ?`).run(
-              it.qty_borrowed,
-              it.item_id
-            );
+            const currentItem = await inventoryRepo.getById(it.item_id);
+            if (currentItem) {
+              await inventoryRepo.update({
+                ...currentItem,
+                qty: currentItem.qty + it.qty_borrowed,
+              });
+            }
 
-            historyRepo.log({
+            await historyRepo.log({
               log_id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
               item_id: it.item_id,
               action_type: 'Returned',

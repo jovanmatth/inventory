@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transactionRepo, db, historyRepo } from '@/lib/db';
+import { transactionRepo, historyRepo, inventoryRepo } from '@/lib/data-provider';
 
 export async function POST(
   request: NextRequest,
@@ -10,7 +10,7 @@ export async function POST(
     const body = await request.json();
     const { performed_by } = body;
 
-    const tx = transactionRepo.getByTicketId(ticketId);
+    const tx = await transactionRepo.getByTicketId(ticketId);
     if (!tx) {
       return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
     }
@@ -25,12 +25,15 @@ export async function POST(
     // Deduct stock for all items
     if (tx.items && tx.items.length) {
       for (const it of tx.items) {
-        db.prepare(`UPDATE Inventory SET qty = MAX(0, qty - ?) WHERE item_id = ?`).run(
-          it.qty_borrowed,
-          it.item_id
-        );
+        const currentItem = await inventoryRepo.getById(it.item_id);
+        if (currentItem) {
+          await inventoryRepo.update({
+            ...currentItem,
+            qty: Math.max(0, currentItem.qty - it.qty_borrowed),
+          });
+        }
 
-        historyRepo.log({
+        await historyRepo.log({
           log_id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           item_id: it.item_id,
           action_type: 'Stock_Out',
@@ -41,7 +44,7 @@ export async function POST(
       }
     }
 
-    transactionRepo.updateStatus(ticketId, 'Picked_Up');
+    await transactionRepo.updateStatus(ticketId, 'Picked_Up');
 
     return NextResponse.json({
       success: true,

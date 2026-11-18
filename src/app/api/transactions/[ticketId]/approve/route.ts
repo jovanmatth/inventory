@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transactionRepo, db } from '@/lib/db';
+import { transactionRepo } from '@/lib/data-provider';
 
 export async function POST(
   request: NextRequest,
@@ -10,7 +10,7 @@ export async function POST(
     const body = await request.json();
     const { action, approved_by, rejection_reason } = body; // action: 'approve' | 'reject' | 'ready'
 
-    const tx = transactionRepo.getByTicketId(ticketId);
+    const tx = await transactionRepo.getByTicketId(ticketId);
     if (!tx) {
       return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
     }
@@ -19,7 +19,7 @@ export async function POST(
       if (!rejection_reason) {
         return NextResponse.json({ success: false, message: 'Alasan penolakan wajib disertakan' }, { status: 400 });
       }
-      transactionRepo.updateStatus(ticketId, 'Rejected', approved_by, rejection_reason);
+      await transactionRepo.updateStatus(ticketId, 'Rejected', approved_by, rejection_reason);
       return NextResponse.json({
         success: true,
         message: `Tiket ${ticketId} telah DITOLAK. Peminjam akan menerima notifikasi status penolakan.`,
@@ -29,7 +29,7 @@ export async function POST(
     if (action === 'approve') {
       // Transition to Approved or Ready_for_Pickup
       const newStatus = tx.transaction_type === 'Reservation' ? 'Ready_for_Pickup' : 'Approved';
-      transactionRepo.updateStatus(ticketId, newStatus, approved_by);
+      await transactionRepo.updateStatus(ticketId, newStatus, approved_by);
       return NextResponse.json({
         success: true,
         message: `Tiket ${ticketId} telah DISETUJUI. Peminjam siap mengambil barang (Ready for Pickup).`,
@@ -37,7 +37,7 @@ export async function POST(
     }
 
     if (action === 'ready') {
-      transactionRepo.updateStatus(ticketId, 'Ready_for_Pickup', approved_by);
+      await transactionRepo.updateStatus(ticketId, 'Ready_for_Pickup', approved_by);
       return NextResponse.json({
         success: true,
         message: `Status Tiket ${ticketId} diperbarui menjadi Ready for Pickup.`,

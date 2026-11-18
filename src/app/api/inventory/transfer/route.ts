@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { inventoryRepo } from '@/lib/db';
+import { inventoryRepo } from '@/lib/data-provider';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Jumlah transfer harus lebih dari 0' }, { status: 400 });
     }
 
-    inventoryRepo.transfer(item_id, target_location, target_detail, Number(transfer_qty), performed_by);
+    await inventoryRepo.transfer(item_id, target_location, target_detail, Number(transfer_qty), performed_by);
 
     return NextResponse.json({
       success: true,
