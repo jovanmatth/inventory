@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
 import { createClient } from '@/lib/supabase-client';
+import { User } from '@/types';
 
 function LoginPageContent() {
   const router = useRouter();
@@ -31,12 +32,47 @@ function LoginPageContent() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showGoogleGuide, setShowGoogleGuide] = useState(false);
 
+  // Last Login & Quick Resume States
+  const [lastUser, setLastUser] = useState<User | null>(null);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
+
   const [gateError, setGateError] = useState<{
     code: 'INVALID_DOMAIN' | 'NOT_WHITELISTED' | 'SERVER_ERROR' | null;
     title: string;
     message: string;
     email?: string;
   } | null>(null);
+
+  // Check last login and active session on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.authenticated && data.user) {
+          setLastUser(data.user);
+          setHasActiveSession(true);
+          try {
+            localStorage.setItem('pigeon_last_user', JSON.stringify(data.user));
+          } catch {}
+        } else {
+          try {
+            const saved = localStorage.getItem('pigeon_last_user');
+            if (saved) {
+              setLastUser(JSON.parse(saved));
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {
+        try {
+          const saved = localStorage.getItem('pigeon_last_user');
+          if (saved) {
+            setLastUser(JSON.parse(saved));
+          }
+        } catch {}
+      });
+  }, []);
 
   // Check URL params from OAuth callback redirects
   useEffect(() => {
@@ -155,6 +191,14 @@ function LoginPageContent() {
         return;
       }
 
+      if (data.user) {
+        setLastUser(data.user);
+        setHasActiveSession(true);
+        try {
+          localStorage.setItem('pigeon_last_user', JSON.stringify(data.user));
+        } catch {}
+      }
+
       router.push(data.redirectUrl);
     } catch (err: any) {
       setGateError({
@@ -165,6 +209,29 @@ function LoginPageContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Resume last login directly with 1 click
+  const handleResumeLastLogin = async () => {
+    if (!lastUser) return;
+    if (hasActiveSession) {
+      let dest = '/user';
+      if (lastUser.role === 'Admin') dest = '/admin';
+      else if (lastUser.role === 'Supervisor') dest = '/supervisor';
+      router.push(dest);
+      return;
+    }
+    await handleGateAuth(lastUser.email, lastUser.name);
+  };
+
+  // Clear last login session to switch account
+  const handleClearLastLogin = async () => {
+    try {
+      localStorage.removeItem('pigeon_last_user');
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    setLastUser(null);
+    setHasActiveSession(false);
   };
 
   const testAccounts = [
@@ -396,34 +463,129 @@ function LoginPageContent() {
                   </div>
                 </form>
 
-                {/* Quick Persona Picker for Easy Demonstration */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Uji Coba Gate Cepat (1-Click):
-                  </span>
-                </div>
+                {/* Last Login Card (1-Click Resume) or Quick Persona Picker */}
+                {lastUser ? (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-pigeon-500/50 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-pigeon-300">
+                        <Sparkles className="w-3.5 h-3.5 text-pigeon-400" />
+                        <span className="tracking-wide">LOGIN TERAKHIR (1-CLICK):</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        {hasActiveSession ? 'Sesi Aktif' : 'Tersimpan'}
+                      </span>
+                    </div>
 
-                <div className="space-y-1.5">
-                  {testAccounts.map((acc, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleGateAuth(acc.email, acc.name)}
-                      disabled={loading}
-                      className="w-full text-left p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition flex items-center justify-between text-xs"
-                    >
-                      <div className="overflow-hidden pr-2">
-                        <div className="font-semibold text-white truncate flex items-center gap-1.5">
-                          <span>{acc.role}</span>
-                          <span className={`text-[9px] px-1.5 py-0.2 rounded border font-normal ${acc.color}`}>
-                            {acc.badge}
+                    <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/70 border border-slate-700/60">
+                      <div className="w-10 h-10 rounded-xl bg-pigeon-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0">
+                        {lastUser.name?.charAt(0) || 'U'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold text-white text-xs truncate">{lastUser.name}</p>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                              lastUser.role === 'Admin'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : lastUser.role === 'Supervisor'
+                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                            }`}
+                          >
+                            {lastUser.role}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-mono truncate">{acc.email}</p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">{lastUser.email}</p>
                       </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleResumeLastLogin}
+                      disabled={loading}
+                      className="w-full py-2.5 px-4 bg-pigeon-600 hover:bg-pigeon-500 active:bg-pigeon-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-pigeon-600/30 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                    >
+                      <span>{loading ? 'Menghubungkan...' : `Lanjutkan sebagai ${lastUser.name} →`}</span>
+                      <ArrowRight className="w-4 h-4" />
                     </button>
-                  ))}
-                </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-0.5 text-slate-400">
+                      <button
+                        type="button"
+                        onClick={handleClearLastLogin}
+                        className="hover:text-red-400 transition cursor-pointer underline underline-offset-2"
+                      >
+                        Ganti akun
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDemoAccounts(!showDemoAccounts)}
+                        className="hover:text-pigeon-300 text-pigeon-400 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <span>{showDemoAccounts ? 'Tutup Akun Demo' : 'Uji Coba Demo Akun'}</span>
+                        {showDemoAccounts ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                    </div>
+
+                    {showDemoAccounts && (
+                      <div className="pt-2 border-t border-slate-700/60 space-y-1.5 animate-in fade-in duration-150">
+                        <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                          Pilih Akun Lain:
+                        </span>
+                        {testAccounts.map((acc, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleGateAuth(acc.email, acc.name)}
+                            disabled={loading}
+                            className="w-full text-left p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition flex items-center justify-between text-xs cursor-pointer"
+                          >
+                            <div className="overflow-hidden pr-2">
+                              <div className="font-semibold text-white truncate flex items-center gap-1.5">
+                                <span>{acc.role}</span>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded border font-normal ${acc.color}`}>
+                                  {acc.badge}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono truncate">{acc.email}</p>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Uji Coba Gate Cepat (1-Click):
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {testAccounts.map((acc, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleGateAuth(acc.email, acc.name)}
+                          disabled={loading}
+                          className="w-full text-left p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition flex items-center justify-between text-xs cursor-pointer"
+                        >
+                          <div className="overflow-hidden pr-2">
+                            <div className="font-semibold text-white truncate flex items-center gap-1.5">
+                              <span>{acc.role}</span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded border font-normal ${acc.color}`}>
+                                {acc.badge}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{acc.email}</p>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -47,6 +47,9 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
       .then((data) => {
         if (data.authenticated && data.user) {
           setCurrentUser(data.user);
+          try {
+            localStorage.setItem('pigeon_last_user', JSON.stringify(data.user));
+          } catch {}
         } else {
           router.push('/');
         }
