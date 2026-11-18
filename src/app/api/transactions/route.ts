@@ -95,6 +95,20 @@ export async function POST(request: NextRequest) {
     // Reservation -> 'In_Queue' (or 'Pending_Approval' for supervisor/admin approval)
     const initialStatus = transaction_type === 'Reservation' ? 'In_Queue' : 'Pending_Approval';
 
+    let normalizedReturnDate: string | null = null;
+    if (expected_return_date) {
+      try {
+        const d = new Date(expected_return_date);
+        if (!isNaN(d.getTime())) {
+          normalizedReturnDate = d.toISOString();
+        } else {
+          normalizedReturnDate = expected_return_date;
+        }
+      } catch {
+        normalizedReturnDate = expected_return_date;
+      }
+    }
+
     const tx: BorrowingTransaction = {
       ticket_id: '',
       user_id,
@@ -102,7 +116,7 @@ export async function POST(request: NextRequest) {
       purpose,
       borrow_date: borrow_date || new Date().toISOString(),
       duration: duration || '1 Hari',
-      expected_return_date: expected_return_date || null,
+      expected_return_date: normalizedReturnDate,
       status: initialStatus,
       approved_by: null,
       rejection_reason: null,

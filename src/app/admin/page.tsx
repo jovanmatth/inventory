@@ -39,6 +39,7 @@ import {
   ReturnedCondition,
   ResolutionStatus,
 } from '@/types';
+import { formatDueDateTime } from '@/lib/date-utils';
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -967,7 +968,7 @@ function AdminDashboardContent() {
                       <span>Durasi: {tx.duration}</span>
                       {tx.expected_return_date && (
                         <span className="text-red-600 font-medium">
-                          Batas Kembali: {new Date(tx.expected_return_date).toLocaleDateString('id-ID')}
+                          Batas Kembali: {formatDueDateTime(tx.expected_return_date)}
                         </span>
                       )}
                     </div>
@@ -1328,7 +1329,7 @@ function AdminDashboardContent() {
                       </td>
                       <td className="p-3">
                         {tx.expected_return_date ? (
-                          <span className="text-slate-700">{new Date(tx.expected_return_date).toLocaleDateString('id-ID')}</span>
+                          <span className="text-slate-700">{formatDueDateTime(tx.expected_return_date)}</span>
                         ) : (
                           <span className="text-slate-400">Habis Pakai</span>
                         )}
@@ -1395,7 +1396,7 @@ function AdminDashboardContent() {
                         <span className="font-mono font-bold text-red-900">{tx.ticket_id}</span>
                         <p className="text-slate-800 font-semibold">{tx.user_name} ({tx.user_email})</p>
                         <p className="text-[10px] text-red-700">
-                          Batas: {new Date(tx.expected_return_date).toLocaleDateString('id-ID')}
+                          Batas: {formatDueDateTime(tx.expected_return_date)}
                         </p>
                       </div>
                       <button

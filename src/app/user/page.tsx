@@ -32,56 +32,9 @@ import {
   X,
 } from 'lucide-react';
 import { InventoryItem, BorrowingTransaction, User } from '@/types';
+import { calculateDueDateLocal, formatDueDateTime } from '@/lib/date-utils';
 
-// Helper to auto-calculate due date based on duration
-const calculateDueDate = (dur: string): string => {
-  const now = new Date();
-
-  // Hari
-  const dayMatch = dur.match(/(\d+)\s*Hari/i);
-  if (dayMatch) {
-    const days = parseInt(dayMatch[1], 10);
-    const target = new Date(now);
-    target.setDate(target.getDate() + days);
-    target.setHours(23, 59, 0, 0);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    return `${year}-${month}-${date}T23:59`;
-  }
-
-  // Jam
-  const hourMatch = dur.match(/(\d+)\s*Jam/i);
-  if (hourMatch) {
-    const hours = parseInt(hourMatch[1], 10);
-    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    const h = String(target.getHours()).padStart(2, '0');
-    const m = String(target.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${date}T${h}:${m}`;
-  }
-
-  // Hari Ini EOD
-  if (dur.toLowerCase().includes('hari ini')) {
-    const target = new Date(now);
-    target.setHours(23, 59, 0, 0);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    return `${year}-${month}-${date}T23:59`;
-  }
-
-  // Default fallback: 1 day at 23:59
-  const target = new Date(now);
-  target.setDate(target.getDate() + 1);
-  target.setHours(23, 59, 0, 0);
-  const year = target.getFullYear();
-  const month = String(target.getMonth() + 1).padStart(2, '0');
-  const date = String(target.getDate()).padStart(2, '0');
-  return `${year}-${month}-${date}T23:59`;
-};
+const calculateDueDate = calculateDueDateLocal;
 
 function UserDashboardContent() {
   const searchParams = useSearchParams();
@@ -315,7 +268,7 @@ function UserDashboardContent() {
           purpose,
           borrow_date: new Date().toISOString(),
           duration,
-          expected_return_date: returnDate || null,
+          expected_return_date: returnDate ? new Date(returnDate).toISOString() : null,
           items: cart.map((c) => ({
             item_id: c.item.item_id,
             qty_borrowed: c.qty,
@@ -819,7 +772,7 @@ function UserDashboardContent() {
                         <span>Durasi: {tx.duration}</span>
                         {tx.expected_return_date && (
                           <span className="text-red-600 font-semibold">
-                            Batas Kembali: {new Date(tx.expected_return_date).toLocaleDateString('id-ID')}
+                            Batas Kembali: {formatDueDateTime(tx.expected_return_date)}
                           </span>
                         )}
                       </div>
@@ -1032,7 +985,7 @@ function UserDashboardContent() {
                   <p><span className="font-semibold text-slate-700">Tujuan Peminjaman:</span> {selectedReturnTx.purpose}</p>
                   <p><span className="font-semibold text-slate-700">Waktu Pinjam:</span> {new Date(selectedReturnTx.borrow_date).toLocaleString('id-ID')}</p>
                   {selectedReturnTx.expected_return_date && (
-                    <p><span className="font-semibold text-slate-700">Batas Pengembalian:</span> <span className="text-red-600 font-bold">{new Date(selectedReturnTx.expected_return_date).toLocaleString('id-ID')}</span></p>
+                    <p><span className="font-semibold text-slate-700">Batas Pengembalian:</span> <span className="text-red-600 font-bold">{formatDueDateTime(selectedReturnTx.expected_return_date)}</span></p>
                   )}
                 </div>
 
@@ -1273,19 +1226,7 @@ function UserDashboardContent() {
               <p>
                 <span className="text-slate-500">Batas Pengembalian:</span>{' '}
                 <span className="font-bold text-red-600">
-                  {selectedTicket.expected_return_date
-                    ? (() => {
-                        const d = new Date(selectedTicket.expected_return_date);
-                        const formattedDate = d.toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        });
-                        const hours = String(d.getHours()).padStart(2, '0');
-                        const minutes = String(d.getMinutes()).padStart(2, '0');
-                        return `${formattedDate} (${hours}:${minutes} WIB)`;
-                      })()
-                    : 'Selesai Pakai'}
+                  {formatDueDateTime(selectedTicket.expected_return_date)}
                 </span>
               </p>
               <div className="pt-2 border-t">

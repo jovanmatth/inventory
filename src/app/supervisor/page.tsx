@@ -33,56 +33,9 @@ import {
   ReturnedCondition,
   ResolutionStatus,
 } from '@/types';
+import { calculateDueDateLocal, formatDueDateTime } from '@/lib/date-utils';
 
-// Helper to auto-calculate due date based on duration
-const calculateDueDate = (dur: string): string => {
-  const now = new Date();
-
-  // Hari
-  const dayMatch = dur.match(/(\d+)\s*Hari/i);
-  if (dayMatch) {
-    const days = parseInt(dayMatch[1], 10);
-    const target = new Date(now);
-    target.setDate(target.getDate() + days);
-    target.setHours(23, 59, 0, 0);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    return `${year}-${month}-${date}T23:59`;
-  }
-
-  // Jam
-  const hourMatch = dur.match(/(\d+)\s*Jam/i);
-  if (hourMatch) {
-    const hours = parseInt(hourMatch[1], 10);
-    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    const h = String(target.getHours()).padStart(2, '0');
-    const m = String(target.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${date}T${h}:${m}`;
-  }
-
-  // Hari Ini EOD
-  if (dur.toLowerCase().includes('hari ini')) {
-    const target = new Date(now);
-    target.setHours(23, 59, 0, 0);
-    const year = target.getFullYear();
-    const month = String(target.getMonth() + 1).padStart(2, '0');
-    const date = String(target.getDate()).padStart(2, '0');
-    return `${year}-${month}-${date}T23:59`;
-  }
-
-  // Default fallback: 1 day at 23:59
-  const target = new Date(now);
-  target.setDate(target.getDate() + 1);
-  target.setHours(23, 59, 0, 0);
-  const year = target.getFullYear();
-  const month = String(target.getMonth() + 1).padStart(2, '0');
-  const date = String(target.getDate()).padStart(2, '0');
-  return `${year}-${month}-${date}T23:59`;
-};
+const calculateDueDate = calculateDueDateLocal;
 
 function SupervisorDashboardContent() {
   const searchParams = useSearchParams();
@@ -234,7 +187,7 @@ function SupervisorDashboardContent() {
           purpose: borrowPurpose,
           borrow_date: new Date().toISOString(),
           duration: borrowDuration,
-          expected_return_date: borrowReturnDate || null,
+          expected_return_date: borrowReturnDate ? new Date(borrowReturnDate).toISOString() : null,
           items: cart.map((c) => ({
             item_id: c.item.item_id,
             qty_borrowed: c.qty,
