@@ -110,7 +110,17 @@ export async function POST(
 
     // Determine final transaction status
     const finalTxStatus = finalResolution === 'Resolved' ? 'Returned' : 'Issue_Reported';
-    await transactionRepo.updateStatus(ticketId, finalTxStatus);
+    const completedPayload = JSON.stringify({
+      type: 'RETURNED',
+      proof_url: tx.return_proof_url || null,
+      notes: tx.return_notes || null,
+      returned_at: actualReturnDate.toISOString(),
+      received_by,
+      returned_condition,
+      resolution_status: finalResolution,
+      penalty: penaltySummary,
+    });
+    await transactionRepo.updateStatus(ticketId, finalTxStatus, received_by, completedPayload);
 
     // Restore stock for Loan items if condition is Good or Resolved
     if (finalResolution === 'Resolved' && returned_condition !== 'Lost' && returned_condition !== 'Damaged_Heavy') {

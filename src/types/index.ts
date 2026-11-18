@@ -59,6 +59,12 @@ export interface BorrowingTransaction {
   status: TransactionStatus;
   approved_by: string | null;
   rejection_reason: string | null;
+  // Return proof metadata
+  return_proof_url?: string | null;
+  return_notes?: string | null;
+  return_requested_at?: string | null;
+  is_return_pending?: boolean;
+  return_rejection_note?: string | null;
   // Joins
   user_name?: string;
   user_email?: string;

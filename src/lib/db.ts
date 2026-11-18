@@ -333,6 +333,38 @@ export const inventoryRepo = {
   }
 };
 
+function parseReturnMetadata(rejectionReason: string | null | undefined) {
+  let return_proof_url: string | null = null;
+  let return_notes: string | null = null;
+  let return_requested_at: string | null = null;
+  let is_return_pending = false;
+  let return_rejection_note: string | null = null;
+
+  if (rejectionReason && typeof rejectionReason === 'string' && rejectionReason.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(rejectionReason);
+      if (parsed.type === 'RETURN_PENDING') {
+        return_proof_url = parsed.proof_url || null;
+        return_notes = parsed.notes || null;
+        return_requested_at = parsed.requested_at || null;
+        is_return_pending = true;
+      } else if (parsed.type === 'RETURN_REJECTED') {
+        return_rejection_note = parsed.reason || null;
+      } else if (parsed.type === 'RETURNED') {
+        return_proof_url = parsed.proof_url || null;
+        return_notes = parsed.notes || null;
+      }
+    } catch (e) {}
+  }
+  return {
+    return_proof_url,
+    return_notes,
+    return_requested_at,
+    is_return_pending,
+    return_rejection_note,
+  };
+}
+
 export const transactionRepo = {
   getNextTicketId(): string {
     if (!db) return 'PGE-0001';
@@ -369,6 +401,7 @@ export const transactionRepo = {
       const rows = db.prepare(sql).all(...(params as [any])) as unknown as BorrowingTransaction[];
 
       for (const row of rows) {
+        Object.assign(row, parseReturnMetadata(row.rejection_reason));
         row.items = db.prepare(`
           SELECT ti.*, i.item_name, i.brand, i.location
           FROM Transaction_Items ti
@@ -392,6 +425,7 @@ export const transactionRepo = {
       `).get(ticketId) as BorrowingTransaction | undefined;
 
       if (row) {
+        Object.assign(row, parseReturnMetadata(row.rejection_reason));
         row.items = db.prepare(`
           SELECT ti.*, i.item_name, i.brand, i.location
           FROM Transaction_Items ti

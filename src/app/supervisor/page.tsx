@@ -22,6 +22,10 @@ import {
   RefreshCw,
   ShoppingCart,
   Trash2,
+  Eye,
+  Camera,
+  CheckCircle,
+  X,
 } from 'lucide-react';
 import {
   InventoryItem,
@@ -114,6 +118,37 @@ function SupervisorDashboardContent() {
   const [returnedCondition, setReturnedCondition] = useState<ReturnedCondition>('Good');
   const [customPenalty, setCustomPenalty] = useState('');
   const [resolutionStatus, setResolutionStatus] = useState<ResolutionStatus>('Resolved');
+  const [zoomProofUrl, setZoomProofUrl] = useState<string | null>(null);
+  const [rejectReturnModalTx, setRejectReturnModalTx] = useState<BorrowingTransaction | null>(null);
+  const [rejectReturnReason, setRejectReturnReason] = useState('');
+  const [submittingRejectReturn, setSubmittingRejectReturn] = useState(false);
+
+  const handleRejectReturn = async () => {
+    if (!rejectReturnModalTx) return;
+    setSubmittingRejectReturn(true);
+    try {
+      const res = await fetch(`/api/transactions/${rejectReturnModalTx.ticket_id}/reject-return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: rejectReturnReason.trim() || 'Foto bukti pengembalian tidak valid / barang fisik belum diterima di laboratorium.',
+          rejected_by: 'Supervisor ICT Lab',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+
+      showNotification(data.message || 'Bukti pengembalian telah ditolak');
+      setRejectReturnModalTx(null);
+      setRejectReturnReason('');
+      setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    } finally {
+      setSubmittingRejectReturn(false);
+    }
+  };
 
   // Filter
   const [itemSearch, setItemSearch] = useState('');
@@ -738,10 +773,133 @@ function SupervisorDashboardContent() {
 
       {/* TAB 5: RETURNS & PENALTIES */}
       {activeTab === 'returns' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <h2 className="text-base font-bold text-slate-900 mb-2">Pemeriksaan Kembali Barang</h2>
-            <div className="flex gap-2 mb-4">
+        <div className="space-y-5">
+          {/* Section 1: Pending Return Requests with Photo Proof */}
+          {(() => {
+            const pendingReturns = transactions.filter((t) => t.is_return_pending);
+
+            return (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 text-pigeon-600" />
+                      <span>Permohonan Pengembalian Menunggu Approval</span>
+                      {pendingReturns.length > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          {pendingReturns.length} Menunggu
+                        </span>
+                      )}
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Peminjam telah mengunggah foto bukti fisik serah terima dan memohon penutupan tiket pinjaman.
+                    </p>
+                  </div>
+                </div>
+
+                {pendingReturns.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {pendingReturns.map((tx) => (
+                      <div
+                        key={tx.ticket_id}
+                        className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 flex flex-col justify-between"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-black text-slate-900 text-sm">{tx.ticket_id}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-700" /> Menunggu Approval
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-700">
+                            <span className="font-semibold">Peminjam:</span> {tx.user_name} ({tx.user_email})
+                          </p>
+
+                          {tx.return_notes && (
+                            <div className="p-2 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900">
+                              <span className="font-semibold">Catatan Peminjam:</span> "{tx.return_notes}"
+                            </div>
+                          )}
+
+                          {/* Items */}
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {tx.items?.map((it) => (
+                              <span key={it.id} className="text-[10px] bg-white border px-2 py-0.5 rounded text-slate-800 font-medium">
+                                {it.item_name} ({it.qty_borrowed} unit)
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Return Proof Photo */}
+                          {tx.return_proof_url && (
+                            <div className="pt-2">
+                              <p className="text-[11px] font-bold text-slate-700 mb-1">Foto Bukti Fisik:</p>
+                              <div className="relative group inline-block">
+                                <img
+                                  src={tx.return_proof_url}
+                                  alt="Foto Bukti"
+                                  onClick={() => setZoomProofUrl(tx.return_proof_url!)}
+                                  className="w-36 h-24 object-cover rounded-xl border border-slate-200 shadow-sm cursor-zoom-in group-hover:opacity-90 transition-opacity"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setZoomProofUrl(tx.return_proof_url!)}
+                                  className="absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold gap-1 transition-opacity cursor-pointer"
+                                >
+                                  <Eye className="w-4 h-4" /> Perbesar
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 pt-3 border-t border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedReturnTx(tx);
+                              setReturnTicketId(tx.ticket_id);
+                            }}
+                            className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Verifikasi & Selesaikan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectReturnModalTx(tx);
+                              setRejectReturnReason('');
+                            }}
+                            className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer"
+                            title="Tolak Bukti"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Tolak Bukti</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-xs text-slate-400">
+                    Tidak ada permohonan pengembalian yang menunggu konfirmasi saat ini.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Section 2: Return Quality Check Form */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <h2 className="text-base font-bold text-slate-900">Pemeriksaan Kembali Barang Fisik</h2>
+            <p className="text-xs text-slate-500">
+              Cari tiket berdasarkan Ticket ID atau pilih dari permohonan di atas untuk verifikasi serah terima.
+            </p>
+
+            <div className="flex gap-2">
               <input
                 type="text"
                 placeholder="Masukkan Ticket ID (PGE-XXXX)..."
@@ -750,53 +908,127 @@ function SupervisorDashboardContent() {
                 className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs uppercase flex-1 font-mono"
               />
               <button
+                type="button"
                 onClick={() => {
-                  const f = transactions.find((t) => t.ticket_id === returnTicketId);
+                  const f = transactions.find((t) => t.ticket_id === returnTicketId.trim());
                   if (f) setSelectedReturnTx(f);
                   else showNotification('Tiket tidak ditemukan', 'error');
                 }}
-                className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
                 Cari
               </button>
             </div>
 
             {selectedReturnTx && (
-              <form onSubmit={handleSubmitReturn} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 text-xs">
-                <p className="font-bold text-slate-900">Verifikasi Tiket {selectedReturnTx.ticket_id} ({selectedReturnTx.user_name})</p>
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSubmitReturn} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 text-xs">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div>
-                    <label className="block font-semibold mb-1">Kondisi Barang:</label>
+                    <span className="font-mono font-black text-slate-900 text-sm">{selectedReturnTx.ticket_id}</span>
+                    <p className="text-xs text-slate-600 font-medium">Peminjam: {selectedReturnTx.user_name} ({selectedReturnTx.user_email})</p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900">
+                    Status: {selectedReturnTx.status}
+                  </span>
+                </div>
+
+                {/* Return Proof Photo in Inspection Form */}
+                {selectedReturnTx.return_proof_url && (
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <img
+                      src={selectedReturnTx.return_proof_url}
+                      alt="Foto Bukti"
+                      onClick={() => setZoomProofUrl(selectedReturnTx.return_proof_url!)}
+                      className="w-28 h-20 object-cover rounded-lg border border-slate-200 shadow-sm cursor-zoom-in"
+                    />
+                    <div className="space-y-1">
+                      <p className="font-bold text-slate-800 text-xs flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Foto Bukti Fisik Telah Dilampirkan Peminjam</span>
+                      </p>
+                      {selectedReturnTx.return_notes && (
+                        <p className="text-slate-600 text-[11px]">
+                          Catatan: "{selectedReturnTx.return_notes}"
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setZoomProofUrl(selectedReturnTx.return_proof_url!)}
+                        className="text-pigeon-600 font-bold hover:underline text-[11px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" /> Lihat Foto Ukuran Penuh
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Items */}
+                <div>
+                  <p className="font-bold text-slate-800 mb-1">Barang Terpinjam:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedReturnTx.items?.map((it) => (
+                      <span key={it.id} className="p-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800">
+                        {it.item_name} ({it.qty_borrowed} unit • {it.borrowing_type})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Kondisi Fisik Barang (Quality Check):</label>
                     <select
                       value={returnedCondition}
                       onChange={(e) => setReturnedCondition(e.target.value as ReturnedCondition)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-pigeon-500"
                     >
-                      <option value="Good">Kondisi Baik</option>
-                      <option value="Damaged_Light">Rusak Ringan</option>
-                      <option value="Damaged_Medium">Rusak Sedang</option>
-                      <option value="Damaged_Heavy">Rusak Berat</option>
-                      <option value="Lost">Hilang</option>
+                      <option value="Good">Kondisi Baik (Good) — Tanpa Kerusakan</option>
+                      <option value="Damaged_Light">Rusak Ringan (Light)</option>
+                      <option value="Damaged_Medium">Rusak Sedang (Medium)</option>
+                      <option value="Damaged_Heavy">Rusak Berat (Heavy)</option>
+                      <option value="Lost">Hilang (Lost)</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block font-semibold mb-1">Status Resolusi:</label>
+                    <label className="block font-bold text-slate-800 mb-1">Status Resolusi:</label>
                     <select
                       value={resolutionStatus}
                       onChange={(e) => setResolutionStatus(e.target.value as ResolutionStatus)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-pigeon-500"
                     >
-                      <option value="Resolved">Resolved (Selesai)</option>
-                      <option value="Not_Resolved">Not Resolved</option>
+                      <option value="Resolved">Resolved (Selesai & Barang Masuk Kembali ke Stok)</option>
+                      <option value="Not_Resolved">Not Resolved (Membutuhkan Tindak Lanjut Ganti Rugi)</option>
                     </select>
                   </div>
                 </div>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-pigeon-600 hover:bg-pigeon-700 text-white rounded-xl font-bold"
-                >
-                  Konfirmasi Pengembalian
-                </button>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Catatan Khusus / Sanksi (Opsional):</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Barang lengkap dan normal / Dikenakan biaya ganti rugi Rp..."
+                    value={customPenalty}
+                    onChange={(e) => setCustomPenalty(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-pigeon-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-pigeon-600 hover:bg-pigeon-700 active:bg-pigeon-800 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Approve & Selesaikan Pengembalian (Tutup Tiket)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReturnTx(null)}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
               </form>
             )}
           </div>
@@ -840,6 +1072,67 @@ function SupervisorDashboardContent() {
               <button onClick={() => setRejectModalTx(null)} className="px-3 py-1.5 bg-slate-100 rounded-lg text-xs">Batal</button>
               <button onClick={handleReject} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold">Tolak Tiket</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT RETURN PROOF MODAL */}
+      {rejectReturnModalTx && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-3">
+            <h3 className="font-bold text-slate-900 text-sm">Tolak Bukti Pengembalian {rejectReturnModalTx.ticket_id}</h3>
+            <p className="text-xs text-slate-500">
+              Peminjam akan diberitahu alasan penolakan dan diminta mengunggah ulang foto bukti serah terima fisik.
+            </p>
+            <textarea
+              rows={3}
+              value={rejectReturnReason}
+              onChange={(e) => setRejectReturnReason(e.target.value)}
+              placeholder="Contoh: Barang fisik belum ditemukan di meja lab / foto buram tidak terlihat..."
+              className="w-full p-2.5 border rounded-xl text-xs focus:ring-2 focus:ring-red-500"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setRejectReturnModalTx(null)}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={submittingRejectReturn}
+                onClick={handleRejectReturn}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm"
+              >
+                {submittingRejectReturn ? 'Memproses...' : 'Tolak Bukti Pengembalian'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PHOTO PROOF ZOOM / LIGHTBOX */}
+      {zoomProofUrl && (
+        <div
+          onClick={() => setZoomProofUrl(null)}
+          className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="relative max-w-2xl w-full text-center my-auto" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setZoomProofUrl(null)}
+              className="absolute -top-12 right-0 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
+              title="Tutup (ESC)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={zoomProofUrl}
+              alt="Foto Bukti Pengembalian Fisik"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl mx-auto shadow-2xl border border-white/20 object-contain"
+            />
+            <p className="text-white/80 text-xs mt-3 font-semibold">Foto Bukti Pengembalian Fisik Barang</p>
           </div>
         </div>
       )}

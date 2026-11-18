@@ -246,6 +246,38 @@ export const hybridInventoryRepo = {
   },
 };
 
+export function parseReturnMetadata(rejectionReason: string | null | undefined) {
+  let return_proof_url: string | null = null;
+  let return_notes: string | null = null;
+  let return_requested_at: string | null = null;
+  let is_return_pending = false;
+  let return_rejection_note: string | null = null;
+
+  if (rejectionReason && typeof rejectionReason === 'string' && rejectionReason.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(rejectionReason);
+      if (parsed.type === 'RETURN_PENDING') {
+        return_proof_url = parsed.proof_url || null;
+        return_notes = parsed.notes || null;
+        return_requested_at = parsed.requested_at || null;
+        is_return_pending = true;
+      } else if (parsed.type === 'RETURN_REJECTED') {
+        return_rejection_note = parsed.reason || null;
+      } else if (parsed.type === 'RETURNED') {
+        return_proof_url = parsed.proof_url || null;
+        return_notes = parsed.notes || null;
+      }
+    } catch (e) {}
+  }
+  return {
+    return_proof_url,
+    return_notes,
+    return_requested_at,
+    is_return_pending,
+    return_rejection_note,
+  };
+}
+
 export const hybridTransactionRepo = {
   async getNextTicketId(): Promise<string> {
     if (isSupabaseConfigured() && supabaseAdmin) {
@@ -289,30 +321,34 @@ export const hybridTransactionRepo = {
 
       const { data, error } = await query.order('borrow_date', { ascending: false });
       if (!error && data) {
-        return data.map((t: any) => ({
-          ticket_id: t.ticket_id,
-          user_id: t.user_id,
-          transaction_type: t.transaction_type,
-          purpose: t.purpose,
-          borrow_date: t.borrow_date,
-          duration: t.duration,
-          expected_return_date: t.expected_return_date,
-          status: t.status,
-          approved_by: t.approved_by,
-          rejection_reason: t.rejection_reason,
-          user_name: t.users?.name,
-          user_email: t.users?.email,
-          items: t.transaction_items?.map((ti: any) => ({
-            id: ti.id,
-            ticket_id: ti.ticket_id,
-            item_id: ti.item_id,
-            qty_borrowed: ti.qty_borrowed,
-            borrowing_type: ti.borrowing_type,
-            item_name: ti.inventory?.item_name,
-            brand: ti.inventory?.brand,
-            location: ti.inventory?.location,
-          })),
-        })) as BorrowingTransaction[];
+        return data.map((t: any) => {
+          const retMeta = parseReturnMetadata(t.rejection_reason);
+          return {
+            ticket_id: t.ticket_id,
+            user_id: t.user_id,
+            transaction_type: t.transaction_type,
+            purpose: t.purpose,
+            borrow_date: t.borrow_date,
+            duration: t.duration,
+            expected_return_date: t.expected_return_date,
+            status: t.status,
+            approved_by: t.approved_by,
+            rejection_reason: t.rejection_reason,
+            ...retMeta,
+            user_name: t.users?.name,
+            user_email: t.users?.email,
+            items: t.transaction_items?.map((ti: any) => ({
+              id: ti.id,
+              ticket_id: ti.ticket_id,
+              item_id: ti.item_id,
+              qty_borrowed: ti.qty_borrowed,
+              borrowing_type: ti.borrowing_type,
+              item_name: ti.inventory?.item_name,
+              brand: ti.inventory?.brand,
+              location: ti.inventory?.location,
+            })),
+          };
+        }) as BorrowingTransaction[];
       }
     }
     return sqliteTransactionRepo.getAll(filter);
@@ -334,6 +370,7 @@ export const hybridTransactionRepo = {
         .maybeSingle();
 
       if (!error && data) {
+        const retMeta = parseReturnMetadata(data.rejection_reason);
         return {
           ticket_id: data.ticket_id,
           user_id: data.user_id,
@@ -345,6 +382,7 @@ export const hybridTransactionRepo = {
           status: data.status,
           approved_by: data.approved_by,
           rejection_reason: data.rejection_reason,
+          ...retMeta,
           user_name: data.users?.name,
           user_email: data.users?.email,
           items: data.transaction_items?.map((ti: any) => ({
@@ -397,14 +435,14 @@ export const hybridTransactionRepo = {
     return ticketId;
   },
 
-  async updateStatus(ticketId: string, status: string, approvedBy?: string, rejectionReason?: string): Promise<void> {
+  async updateStatus(ticketId: string, status: string, approvedBy?: string, rejectionReason?: string | null): Promise<void> {
     if (isSupabaseConfigured() && supabaseAdmin) {
       const updateData: any = { status };
-      if (approvedBy) updateData.approved_by = approvedBy;
-      if (rejectionReason) updateData.rejection_reason = rejectionReason;
+      if (approvedBy !== undefined) updateData.approved_by = approvedBy;
+      if (rejectionReason !== undefined) updateData.rejection_reason = rejectionReason;
       await supabaseAdmin.from('borrowing_transactions').update(updateData).eq('ticket_id', ticketId);
     }
-    sqliteTransactionRepo.updateStatus(ticketId, status, approvedBy, rejectionReason);
+    sqliteTransactionRepo.updateStatus(ticketId, status, approvedBy, rejectionReason || undefined);
   },
 
   async delete(ticketId: string): Promise<void> {
