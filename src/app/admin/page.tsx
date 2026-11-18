@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import { useRealtimeSync, broadcastDataChange } from '@/lib/useRealtimeSync';
 import {
   Boxes,
   Users as UsersIcon,
@@ -87,24 +88,35 @@ function AdminDashboardContent() {
     if (tabParam) setActiveTab(tabParam);
   }, [searchParams]);
 
-  // Load all data
+  // Load all data with silent real-time background sync
+  const loadAdminData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    try {
+      const [monData, usrData, invData, txData] = await Promise.all([
+        fetch('/api/monitoring').then((r) => r.json()),
+        fetch('/api/users').then((r) => r.json()),
+        fetch('/api/inventory').then((r) => r.json()),
+        fetch('/api/transactions').then((r) => r.json()),
+      ]);
+      if (monData?.success) setStats(monData);
+      if (usrData?.success) setUsers(usrData.users || []);
+      if (invData?.success) setInventory(invData.items || []);
+      if (txData?.success) setTransactions(txData.transactions || []);
+    } catch (err) {
+      console.error('Admin sync error:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch('/api/monitoring').then((r) => r.json()),
-      fetch('/api/users').then((r) => r.json()),
-      fetch('/api/inventory').then((r) => r.json()),
-      fetch('/api/transactions').then((r) => r.json()),
-    ])
-      .then(([monData, usrData, invData, txData]) => {
-        if (monData.success) setStats(monData);
-        if (usrData.success) setUsers(usrData.users);
-        if (invData.success) setInventory(invData.items);
-        if (txData.success) setTransactions(txData.transactions);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+    loadAdminData(false);
   }, [refreshTrigger]);
+
+  useRealtimeSync({
+    onRefresh: () => loadAdminData(true),
+    pollIntervalMs: 3500,
+  });
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setAlertMsg({ type, text });
@@ -139,6 +151,7 @@ function AdminDashboardContent() {
       setShowAddUserModal(false);
       setEditingUser(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -154,6 +167,7 @@ function AdminDashboardContent() {
       showNotification('User Deleted Successfully');
       setUserToDelete(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -196,6 +210,7 @@ function AdminDashboardContent() {
       setShowAddItemModal(false);
       setEditingItem(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -211,6 +226,7 @@ function AdminDashboardContent() {
       showNotification('Barang berhasil dihapus');
       setItemToDelete(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
       setItemToDelete(null);
@@ -241,6 +257,7 @@ function AdminDashboardContent() {
       setShowTransferModal(false);
       setTransferTargetItem(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -259,6 +276,7 @@ function AdminDashboardContent() {
 
       showNotification(data.message);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -283,6 +301,7 @@ function AdminDashboardContent() {
       setRejectModalTx(null);
       setRejectionReason('');
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -301,6 +320,7 @@ function AdminDashboardContent() {
 
       showNotification(data.message);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -330,6 +350,7 @@ function AdminDashboardContent() {
       setSelectedReturnTx(null);
       setReturnTicketId('');
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }

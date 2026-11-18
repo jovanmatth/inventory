@@ -211,7 +211,13 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
             P
           </div>
           <div>
-            <h1 className="font-bold text-sm tracking-wide">PIGEON</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-sm tracking-wide">PIGEON</h1>
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Live
+              </span>
+            </div>
             <p className="text-[10px] text-slate-400">ICT Lab 1 & 2 Organizer</p>
           </div>
         </div>
@@ -241,6 +247,10 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 leading-tight">Sekolah Mutiara Bangsa</p>
+              <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold w-fit">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Live Realtime</span>
+              </div>
             </div>
           </div>
         </div>

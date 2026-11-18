@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import { useRealtimeSync, broadcastDataChange } from '@/lib/useRealtimeSync';
 import {
   Boxes,
   ShoppingBag,
@@ -75,26 +76,47 @@ function UserDashboardContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then(async (authData) => {
-        if (authData.authenticated && authData.user) {
-          setCurrentUser(authData.user);
-          const [invRes, txRes] = await Promise.all([
-            fetch('/api/inventory'),
-            fetch(`/api/transactions?user_id=${authData.user.user_id}`),
-          ]);
-          const invData = await invRes.json();
-          const txData = await txRes.json();
-          if (invData?.success) setInventory(invData.items);
-          if (txData?.success) setTransactions(txData.transactions);
+  // Load user data with silent real-time background sync
+  const loadUserData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    try {
+      const authRes = await fetch('/api/auth/me');
+      const authData = await authRes.json();
+      if (authData.authenticated && authData.user) {
+        setCurrentUser(authData.user);
+        const [invRes, txRes] = await Promise.all([
+          fetch('/api/inventory'),
+          fetch(`/api/transactions?user_id=${authData.user.user_id}`),
+        ]);
+        const invData = await invRes.json();
+        const txData = await txRes.json();
+        if (invData?.success) setInventory(invData.items || []);
+        if (txData?.success) {
+          const freshTx = txData.transactions || [];
+          setTransactions(freshTx);
+          // Auto-sync status of currently viewed ticket if open
+          setSelectedTicket((prev) => {
+            if (!prev) return null;
+            const updated = freshTx.find((t: BorrowingTransaction) => t.ticket_id === prev.ticket_id);
+            return updated || prev;
+          });
         }
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+      }
+    } catch (err) {
+      console.error('User sync error:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUserData(false);
   }, [refreshTrigger]);
+
+  useRealtimeSync({
+    onRefresh: () => loadUserData(true),
+    pollIntervalMs: 3500,
+  });
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setAlertMsg({ type, text });
@@ -162,6 +184,7 @@ function UserDashboardContent() {
       setReturnDate('');
       setRefreshTrigger((v) => v + 1);
       setActiveTab('tickets');
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -180,6 +203,7 @@ function UserDashboardContent() {
       setTicketToDelete(null);
       setSelectedTicket(null);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
       setTicketToDelete(null);
@@ -638,7 +662,7 @@ function UserDashboardContent() {
       )}
       </AppShell>
 
-      {/* TICKET MODAL - MOVED OUTSIDE APPSHELL WITH Z-[9999] AND DUAL POINTER/CLICK EVENTS */}
+      {/* TICKET MODAL - MOVED OUTSIDE APPSHELL WITH Z-[9999] AND MULTI-TOUCH/CLICK/ESC SUPPORT */}
       {selectedTicket && (
         <div
           onPointerDown={(e) => {
@@ -651,17 +675,17 @@ function UserDashboardContent() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
             className="relative bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center my-auto"
           >
             {/* Top Right Close Button */}
             <button
               type="button"
-              onPointerDown={(e) => {
-                e.stopPropagation();
+              onClick={() => setSelectedTicket(null)}
+              onTouchEnd={(e) => {
+                e.preventDefault();
                 setSelectedTicket(null);
               }}
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 setSelectedTicket(null);
               }}
@@ -696,14 +720,14 @@ function UserDashboardContent() {
             {selectedTicket.status !== 'Picked_Up' && (
               <button
                 type="button"
-                onPointerDown={(e) => {
+                onClick={(e) => {
                   e.stopPropagation();
                   const target = selectedTicket;
                   setSelectedTicket(null);
                   setTicketToDelete(target);
                 }}
-                onClick={(e) => {
-                  e.stopPropagation();
+                onTouchEnd={(e) => {
+                  e.preventDefault();
                   const target = selectedTicket;
                   setSelectedTicket(null);
                   setTicketToDelete(target);
@@ -717,11 +741,12 @@ function UserDashboardContent() {
 
             <button
               type="button"
-              onPointerDown={(e) => {
-                e.stopPropagation();
+              onClick={() => setSelectedTicket(null)}
+              onTouchEnd={(e) => {
+                e.preventDefault();
                 setSelectedTicket(null);
               }}
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 setSelectedTicket(null);
               }}
@@ -746,18 +771,18 @@ function UserDashboardContent() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
             className="relative bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center my-auto"
           >
             {/* Top Right Close Button */}
             <button
               type="button"
               disabled={deletingTicket}
-              onPointerDown={(e) => {
-                e.stopPropagation();
+              onClick={() => setTicketToDelete(null)}
+              onTouchEnd={(e) => {
+                e.preventDefault();
                 setTicketToDelete(null);
               }}
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 setTicketToDelete(null);
               }}
@@ -779,8 +804,15 @@ function UserDashboardContent() {
               <button
                 type="button"
                 disabled={deletingTicket}
-                onPointerDown={() => setTicketToDelete(null)}
                 onClick={() => setTicketToDelete(null)}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  setTicketToDelete(null);
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setTicketToDelete(null);
+                }}
                 className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
               >
                 Kembali

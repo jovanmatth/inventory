@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import { useRealtimeSync, broadcastDataChange } from '@/lib/useRealtimeSync';
 import {
   Boxes,
   Layers,
@@ -70,20 +71,33 @@ function SupervisorDashboardContent() {
     if (tabParam) setActiveTab(tabParam);
   }, [searchParams]);
 
+  // Load all supervisor data with silent background sync
+  const loadSupervisorData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    try {
+      const [monData, invData, txData] = await Promise.all([
+        fetch('/api/monitoring').then((r) => r.json()),
+        fetch('/api/inventory').then((r) => r.json()),
+        fetch('/api/transactions').then((r) => r.json()),
+      ]);
+      if (monData?.success) setStats(monData);
+      if (invData?.success) setInventory(invData.items || []);
+      if (txData?.success) setTransactions(txData.transactions || []);
+    } catch (err) {
+      console.error('Supervisor sync error:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch('/api/monitoring').then((r) => r.json()),
-      fetch('/api/inventory').then((r) => r.json()),
-      fetch('/api/transactions').then((r) => r.json()),
-    ])
-      .then(([monData, invData, txData]) => {
-        if (monData.success) setStats(monData);
-        if (invData.success) setInventory(invData.items);
-        if (txData.success) setTransactions(txData.transactions);
-      })
-      .finally(() => setLoading(false));
+    loadSupervisorData(false);
   }, [refreshTrigger]);
+
+  useRealtimeSync({
+    onRefresh: () => loadSupervisorData(true),
+    pollIntervalMs: 3500,
+  });
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setAlertMsg({ type, text });
@@ -145,6 +159,7 @@ function SupervisorDashboardContent() {
       setBorrowPurpose('');
       setBorrowReturnDate('');
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -162,6 +177,7 @@ function SupervisorDashboardContent() {
 
       showNotification(data.message);
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -186,6 +202,7 @@ function SupervisorDashboardContent() {
       setRejectModalTx(null);
       setRejectionReason('');
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
@@ -214,6 +231,7 @@ function SupervisorDashboardContent() {
       setSelectedReturnTx(null);
       setReturnTicketId('');
       setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
