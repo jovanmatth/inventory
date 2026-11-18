@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { InventoryItem, BorrowingTransaction, User } from '@/types';
 
-export default function UserDashboard() {
+function UserDashboardContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'borrow';
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -624,5 +624,13 @@ export default function UserDashboard() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function UserDashboard() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-xs text-slate-500">Memuat User Dashboard...</div>}>
+      <UserDashboardContent />
+    </React.Suspense>
   );
 }
