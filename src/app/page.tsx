@@ -35,7 +35,6 @@ function LoginPageContent() {
   // Last Login & Quick Resume States
   const [lastUser, setLastUser] = useState<User | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState(false);
-  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
 
   const [gateError, setGateError] = useState<{
     code: 'INVALID_DOMAIN' | 'NOT_WHITELISTED' | 'SERVER_ERROR' | null;
@@ -234,44 +233,6 @@ function LoginPageContent() {
     setHasActiveSession(false);
   };
 
-  const testAccounts = [
-    {
-      role: 'Admin',
-      name: 'Budi Santoso (Admin ICT)',
-      email: 'admin.ict@mutiarabangsa.sch.id',
-      badge: 'Full Access & Transfer',
-      color: 'bg-amber-100 text-amber-800 border-amber-300',
-    },
-    {
-      role: 'Supervisor',
-      name: 'Dr. Hendra Gunawan (Lab Head)',
-      email: 'supervisor.ict@mutiarabangsa.sch.id',
-      badge: 'Approval & Return',
-      color: 'bg-blue-100 text-blue-800 border-blue-300',
-    },
-    {
-      role: 'User (Teacher)',
-      name: 'Sarah Wijaya (Teacher - CS)',
-      email: 'sarah.wijaya@mutiarabangsa.sch.id',
-      badge: 'Borrow & Reserve',
-      color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    },
-    {
-      role: 'Invalid Domain Test',
-      name: 'External User',
-      email: 'user.personal@gmail.com',
-      badge: 'Trigger Gate 1 Failure',
-      color: 'bg-red-100 text-red-800 border-red-300',
-    },
-    {
-      role: 'Not Whitelisted Test',
-      name: 'New Unknown Staff',
-      email: 'unknown.teacher@mutiarabangsa.sch.id',
-      badge: 'Trigger Gate 2 Failure',
-      color: 'bg-orange-100 text-orange-800 border-orange-300',
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-slate-100 flex flex-col justify-between p-4 md:p-8">
       {/* Top Navbar */}
@@ -433,39 +394,11 @@ function LoginPageContent() {
                 </p>
               </div>
 
-              {/* Manual Input or Simulator */}
+              {/* Manual Input or Last Login */}
               <div className="mt-6 pt-5 border-t border-slate-800">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (emailInput) handleGateAuth(emailInput, nameInput);
-                  }}
-                  className="space-y-2 mb-4"
-                >
-                  <label className="block text-[11px] font-medium text-slate-400">
-                    Atau Masukkan Email Pengujian:
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      placeholder="nama@mutiarabangsa.sch.id"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-950/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-pigeon-500 font-mono"
-                    />
-                    <button
-                      type="submit"
-                      disabled={loading || !emailInput}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 transition disabled:opacity-50"
-                    >
-                      {loading ? '...' : 'Masuk'}
-                    </button>
-                  </div>
-                </form>
-
-                {/* Last Login Card (1-Click Resume) or Quick Persona Picker */}
-                {lastUser ? (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-pigeon-500/50 shadow-xl space-y-3">
+                {/* Last Login Card (1-Click Resume) - ONLY SHOWN IF PREVIOUSLY LOGGED IN */}
+                {lastUser && (
+                  <div className="p-3.5 mb-4 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-pigeon-500/50 shadow-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-pigeon-300">
                         <Sparkles className="w-3.5 h-3.5 text-pigeon-400" />
@@ -518,74 +451,38 @@ function LoginPageContent() {
                       >
                         Ganti akun
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowDemoAccounts(!showDemoAccounts)}
-                        className="hover:text-pigeon-300 text-pigeon-400 transition cursor-pointer flex items-center gap-1"
-                      >
-                        <span>{showDemoAccounts ? 'Tutup Akun Demo' : 'Uji Coba Demo Akun'}</span>
-                        {showDemoAccounts ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                      </button>
-                    </div>
-
-                    {showDemoAccounts && (
-                      <div className="pt-2 border-t border-slate-700/60 space-y-1.5 animate-in fade-in duration-150">
-                        <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          Pilih Akun Lain:
-                        </span>
-                        {testAccounts.map((acc, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => handleGateAuth(acc.email, acc.name)}
-                            disabled={loading}
-                            className="w-full text-left p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition flex items-center justify-between text-xs cursor-pointer"
-                          >
-                            <div className="overflow-hidden pr-2">
-                              <div className="font-semibold text-white truncate flex items-center gap-1.5">
-                                <span>{acc.role}</span>
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded border font-normal ${acc.color}`}>
-                                  {acc.badge}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 font-mono truncate">{acc.email}</p>
-                            </div>
-                            <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                        Uji Coba Gate Cepat (1-Click):
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      {testAccounts.map((acc, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleGateAuth(acc.email, acc.name)}
-                          disabled={loading}
-                          className="w-full text-left p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition flex items-center justify-between text-xs cursor-pointer"
-                        >
-                          <div className="overflow-hidden pr-2">
-                            <div className="font-semibold text-white truncate flex items-center gap-1.5">
-                              <span>{acc.role}</span>
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded border font-normal ${acc.color}`}>
-                                {acc.badge}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-mono truncate">{acc.email}</p>
-                          </div>
-                          <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        </button>
-                      ))}
                     </div>
                   </div>
                 )}
+
+                {/* Manual Email Input Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (emailInput) handleGateAuth(emailInput, nameInput);
+                  }}
+                  className="space-y-2"
+                >
+                  <label className="block text-[11px] font-medium text-slate-400">
+                    Atau Masukkan Email Institusi:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      placeholder="nama@mutiarabangsa.sch.id"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-slate-950/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-pigeon-500 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading || !emailInput}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {loading ? '...' : 'Masuk'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
