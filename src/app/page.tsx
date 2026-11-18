@@ -40,6 +40,13 @@ function LoginPageContent() {
 
   // Check URL params from OAuth callback redirects
   useEffect(() => {
+    const codeParam = searchParams.get('code');
+    if (codeParam) {
+      setGoogleLoading(true);
+      window.location.replace(`/auth/callback?code=${encodeURIComponent(codeParam)}`);
+      return;
+    }
+
     const errorParam = searchParams.get('error');
     const emailParam = searchParams.get('email') || '';
     const messageParam = searchParams.get('message') || '';
