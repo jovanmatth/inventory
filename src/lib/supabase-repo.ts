@@ -406,6 +406,29 @@ export const hybridTransactionRepo = {
     }
     sqliteTransactionRepo.updateStatus(ticketId, status, approvedBy, rejectionReason);
   },
+
+  async delete(ticketId: string): Promise<void> {
+    if (isSupabaseConfigured() && supabaseAdmin) {
+      // Check if ticket status is Picked_Up
+      const { data: tx } = await supabaseAdmin
+        .from('borrowing_transactions')
+        .select('status')
+        .eq('ticket_id', ticketId)
+        .maybeSingle();
+
+      if (tx?.status === 'Picked_Up') {
+        throw new Error('Tiket tidak dapat dihapus karena barang fisik sudah diambil (Picked_Up). Silakan selesaikan proses pengembalian.');
+      }
+
+      await supabaseAdmin.from('returns_and_penalties').delete().eq('ticket_id', ticketId);
+      await supabaseAdmin.from('transaction_items').delete().eq('ticket_id', ticketId);
+      const { error } = await supabaseAdmin.from('borrowing_transactions').delete().eq('ticket_id', ticketId);
+      if (error) {
+        throw new Error(`Gagal menghapus tiket dari database: ${error.message}`);
+      }
+    }
+    sqliteTransactionRepo.delete(ticketId);
+  },
 };
 
 export const hybridReturnRepo = {

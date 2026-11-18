@@ -123,3 +123,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const ticketId = searchParams.get('ticket_id');
+
+    if (!ticketId) {
+      return NextResponse.json({ success: false, message: 'Ticket ID diperlukan' }, { status: 400 });
+    }
+
+    await transactionRepo.delete(ticketId);
+    return NextResponse.json({
+      success: true,
+      message: `Tiket ${ticketId} berhasil dibatalkan dan dihapus.`,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 400 });
+  }
+}

@@ -48,6 +48,8 @@ function UserDashboardContent() {
 
   // View Ticket Modal
   const [selectedTicket, setSelectedTicket] = useState<BorrowingTransaction | null>(null);
+  const [ticketToDelete, setTicketToDelete] = useState<BorrowingTransaction | null>(null);
+  const [deletingTicket, setDeletingTicket] = useState(false);
 
   // Return submission state
   const [returnInputTicketId, setReturnInputTicketId] = useState('');
@@ -149,6 +151,27 @@ function UserDashboardContent() {
       setActiveTab('tickets');
     } catch (err: any) {
       showNotification(err.message, 'error');
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
+    setDeletingTicket(true);
+    try {
+      const res = await fetch(`/api/transactions?ticket_id=${encodeURIComponent(ticketId)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+
+      showNotification(data.message || `Tiket ${ticketId} berhasil dibatalkan dan dihapus`);
+      setTicketToDelete(null);
+      setSelectedTicket(null);
+      setRefreshTrigger((v) => v + 1);
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+      setTicketToDelete(null);
+    } finally {
+      setDeletingTicket(false);
     }
   };
 
@@ -537,13 +560,25 @@ function UserDashboardContent() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setSelectedTicket(tx)}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>Lihat Tiket Pengambilan</span>
-                  </button>
+                  <div className="flex items-center gap-2 self-end md:self-center">
+                    <button
+                      onClick={() => setSelectedTicket(tx)}
+                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Detail & QR</span>
+                    </button>
+                    {tx.status !== 'Picked_Up' && (
+                      <button
+                        onClick={() => setTicketToDelete(tx)}
+                        className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold"
+                        title="Batalkan / Hapus Tiket"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Batalkan</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -614,12 +649,54 @@ function UserDashboardContent() {
               Tunjukkan layar ini kepada Admin / Supervisor ICT Lab 1 atau Lab 2 untuk serah terima barang fisik.
             </p>
 
+            {selectedTicket.status !== 'Picked_Up' && (
+              <button
+                onClick={() => setTicketToDelete(selectedTicket)}
+                className="w-full mb-2 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Batalkan & Hapus Tiket Ini</span>
+              </button>
+            )}
+
             <button
               onClick={() => setSelectedTicket(null)}
-              className="w-full py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl"
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
             >
               Tutup Tiket
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE / CANCEL TICKET CONFIRMATION */}
+      {ticketToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertOctagon className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-900 text-base mb-1">Batalkan Tiket Peminjaman?</h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Apakah Anda yakin ingin membatalkan dan menghapus tiket <span className="font-mono font-bold text-slate-900">{ticketToDelete.ticket_id}</span> ({ticketToDelete.purpose})? Permohonan ini akan dihapus secara permanen.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                disabled={deletingTicket}
+                onClick={() => setTicketToDelete(null)}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors"
+              >
+                Kembali
+              </button>
+              <button
+                disabled={deletingTicket}
+                onClick={() => handleDeleteTicket(ticketToDelete.ticket_id)}
+                className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                {deletingTicket ? 'Menghapus...' : 'Ya, Batalkan'}
+              </button>
+            </div>
           </div>
         </div>
       )}

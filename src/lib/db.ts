@@ -443,6 +443,16 @@ export const transactionRepo = {
     } catch (e) {
       console.warn('SQLite transactionRepo.updateStatus failed:', e);
     }
+  },
+  delete(ticketId: string): void {
+    if (!db) return;
+    try {
+      db.prepare(`DELETE FROM Transaction_Items WHERE ticket_id = ?`).run(ticketId);
+      db.prepare(`DELETE FROM Returns_And_Penalties WHERE ticket_id = ?`).run(ticketId);
+      db.prepare(`DELETE FROM Borrowing_Transactions WHERE ticket_id = ?`).run(ticketId);
+    } catch (e) {
+      console.warn('SQLite transactionRepo.delete failed:', e);
+    }
   }
 };
 
