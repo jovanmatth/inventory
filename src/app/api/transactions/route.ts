@@ -133,6 +133,24 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Ticket ID diperlukan' }, { status: 400 });
     }
 
+    // Check transaction status before deleting
+    const existingTx = await transactionRepo.getByTicketId(ticketId);
+    if (!existingTx) {
+      return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
+    }
+
+    // Protection: Disallow deletion if ticket has already been approved or in active usage
+    const nonDeletableStatuses = ['Approved', 'Ready_for_Pickup', 'Picked_Up', 'Returned', 'Overdue', 'Issue_Reported'];
+    if (nonDeletableStatuses.includes(existingTx.status)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Tiket ${ticketId} sudah disetujui (Status: ${existingTx.status}). Tiket yang sudah disetujui tidak dapat dihapus atau dibatalkan.`,
+        },
+        { status: 403 }
+      );
+    }
+
     await transactionRepo.delete(ticketId);
     return NextResponse.json({
       success: true,

@@ -13,6 +13,7 @@ import {
   Search,
   Filter,
   Check,
+  CheckCircle,
   AlertTriangle,
   Clock,
   QrCode,
@@ -701,15 +702,20 @@ function UserDashboardContent() {
                       <QrCode className="w-3.5 h-3.5" />
                       <span>Detail & QR</span>
                     </button>
-                    {tx.status !== 'Picked_Up' && (
+                    {/* Can only cancel if NOT approved yet */}
+                    {(tx.status === 'Pending_Approval' || tx.status === 'In_Queue' || tx.status === 'Rejected') ? (
                       <button
                         onClick={() => setTicketToDelete(tx)}
-                        className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold"
+                        className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
                         title="Batalkan / Hapus Tiket"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Batalkan</span>
                       </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg font-medium">
+                        Terkunci (Disetujui)
+                      </span>
                     )}
                   </div>
                 </div>
@@ -829,7 +835,9 @@ function UserDashboardContent() {
               Tunjukkan layar ini kepada Admin / Supervisor ICT Lab 1 atau Lab 2 untuk serah terima barang fisik.
             </p>
 
-            {selectedTicket.status !== 'Picked_Up' && (
+            {(selectedTicket.status === 'Pending_Approval' ||
+              selectedTicket.status === 'In_Queue' ||
+              selectedTicket.status === 'Rejected') ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -849,6 +857,11 @@ function UserDashboardContent() {
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Batalkan & Hapus Tiket Ini</span>
               </button>
+            ) : (
+              <div className="w-full mb-2.5 py-2.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold rounded-xl flex items-center justify-center gap-1.5">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Tiket Disetujui (Terkunci & Tidak Dapat Dibatalkan)</span>
+              </div>
             )}
 
             <button
