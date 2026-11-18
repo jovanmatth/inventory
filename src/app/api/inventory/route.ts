@@ -146,8 +146,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     await inventoryRepo.delete(id);
-    return NextResponse.json({ success: true, message: 'Item Deleted Successfully' });
+    return NextResponse.json({ success: true, message: 'Barang berhasil dihapus' });
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: error.message }, { status: 400 });
   }
 }

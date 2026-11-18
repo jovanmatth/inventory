@@ -140,7 +140,31 @@ export const hybridInventoryRepo = {
 
   async delete(id: string): Promise<void> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      await supabaseAdmin.from('inventory').delete().eq('item_id', id);
+      // 1. Check if item has active transactions that cannot be deleted
+      const { data: activeTx } = await supabaseAdmin
+        .from('transaction_items')
+        .select('ticket_id, borrowing_transactions!inner(status)')
+        .eq('item_id', id);
+
+      const hasActive = activeTx?.some((t: any) =>
+        ['Pending_Approval', 'Approved', 'In_Queue', 'Ready_for_Pickup', 'Picked_Up', 'Overdue'].includes(
+          t.borrowing_transactions?.status
+        )
+      );
+
+      if (hasActive) {
+        throw new Error('Barang tidak dapat dihapus karena masih terkait peminjaman aktif atau antrean reservasi.');
+      }
+
+      // 2. Cascade delete historical references in transaction_items and transaction_history
+      await supabaseAdmin.from('transaction_items').delete().eq('item_id', id);
+      await supabaseAdmin.from('transaction_history').delete().eq('item_id', id);
+
+      // 3. Delete from inventory
+      const { error } = await supabaseAdmin.from('inventory').delete().eq('item_id', id);
+      if (error) {
+        throw new Error(`Gagal menghapus dari database: ${error.message}`);
+      }
     }
     sqliteInventoryRepo.delete(id);
   },

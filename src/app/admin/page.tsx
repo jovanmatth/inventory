@@ -208,11 +208,12 @@ function AdminDashboardContent() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
 
-      showNotification('Item Deleted Successfully');
+      showNotification('Barang berhasil dihapus');
       setItemToDelete(null);
       setRefreshTrigger((v) => v + 1);
     } catch (err: any) {
       showNotification(err.message, 'error');
+      setItemToDelete(null);
     }
   };
 
@@ -1396,6 +1397,36 @@ function AdminDashboardContent() {
               <button
                 onClick={handleDeleteUser}
                 className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow-sm"
+              >
+                Hapus (YES)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE INVENTORY ITEM CONFIRMATION */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertOctagon className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-900 text-base mb-1">Konfirmasi Hapus Barang?</h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Apakah Anda yakin ingin menghapus barang <span className="font-semibold text-slate-800">{itemToDelete.item_name}</span> ({itemToDelete.brand} - {itemToDelete.location})? Tindakan ini tidak dapat dibatalkan.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setItemToDelete(null)}
+                className="py-2.5 px-4 bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Batal (NO)
+              </button>
+              <button
+                onClick={handleDeleteItem}
+                className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors"
               >
                 Hapus (YES)
               </button>

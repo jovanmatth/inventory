@@ -267,6 +267,8 @@ export const inventoryRepo = {
   delete(id: string): void {
     if (!db) return;
     try {
+      db.prepare(`DELETE FROM Transaction_Items WHERE item_id = ?`).run(id);
+      db.prepare(`DELETE FROM Transaction_History WHERE item_id = ?`).run(id);
       const stmt = db.prepare(`DELETE FROM Inventory WHERE item_id = ?`);
       stmt.run(id);
     } catch (e) {
