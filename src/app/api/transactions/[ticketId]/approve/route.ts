@@ -33,8 +33,11 @@ export async function POST(
       if (tx.status === 'Picked_Up' || tx.status === 'Returned') {
         return NextResponse.json({ success: false, message: `Tiket ${ticketId} sudah diproses lebih lanjut (${tx.status}).` }, { status: 400 });
       }
-      // Transition to Approved or Ready_for_Pickup
-      const newStatus = tx.transaction_type === 'Reservation' ? 'Ready_for_Pickup' : 'Approved';
+      // If pickup time is in the future, set to Approved (Terjadwal)
+      // When pickup time arrives, it automatically transitions to Ready_for_Pickup / Picked_Up
+      const now = new Date();
+      const borrowDate = new Date(tx.borrow_date);
+      const newStatus = borrowDate.getTime() > now.getTime() ? 'Approved' : 'Ready_for_Pickup';
       await transactionRepo.updateStatus(ticketId, newStatus, approved_by);
       return NextResponse.json({
         success: true,

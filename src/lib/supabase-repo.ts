@@ -293,6 +293,76 @@ export function parseReturnMetadata(rejectionReason: string | null | undefined) 
   };
 }
 
+async function syncStatusesSupabase() {
+  if (!isSupabaseConfigured() || !supabaseAdmin) return;
+  const nowIso = new Date().toISOString();
+
+  // 1. Auto-transition to Overdue when expected_return_date has passed
+  try {
+    await supabaseAdmin
+      .from('borrowing_transactions')
+      .update({ status: 'Overdue' })
+      .not('expected_return_date', 'is', null)
+      .lte('expected_return_date', nowIso)
+      .neq('status', 'Returned')
+      .neq('status', 'Rejected')
+      .neq('status', 'Overdue');
+  } catch (err) {
+    console.warn('Auto overdue check error:', err);
+  }
+
+  // 2. Auto-transition to Picked_Up when borrow_date (waktu ambil) has arrived
+  try {
+    const { data: readyTxs } = await supabaseAdmin
+      .from('borrowing_transactions')
+      .select('ticket_id, user_id, transaction_items(item_id, qty_borrowed)')
+      .in('status', ['Approved', 'Ready_for_Pickup'])
+      .lte('borrow_date', nowIso)
+      .gt('expected_return_date', nowIso);
+
+    if (readyTxs && readyTxs.length > 0) {
+      for (const tx of readyTxs) {
+        if (tx.transaction_items && tx.transaction_items.length) {
+          for (const it of tx.transaction_items) {
+            const { data: item } = await supabaseAdmin
+              .from('inventory')
+              .select('*')
+              .eq('item_id', it.item_id)
+              .maybeSingle();
+
+            if (item) {
+              const newQty = Math.max(0, item.qty - it.qty_borrowed);
+              await supabaseAdmin
+                .from('inventory')
+                .update({
+                  qty: newQty,
+                  status: newQty === 0 ? 'Borrowed' : item.status,
+                })
+                .eq('item_id', it.item_id);
+
+              await supabaseAdmin.from('inventory_history').insert({
+                log_id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                item_id: it.item_id,
+                action_type: 'Stock_Out',
+                qty_changed: -it.qty_borrowed,
+                timestamp: nowIso,
+                performed_by: tx.user_id,
+              });
+            }
+          }
+        }
+
+        await supabaseAdmin
+          .from('borrowing_transactions')
+          .update({ status: 'Picked_Up' })
+          .eq('ticket_id', tx.ticket_id);
+      }
+    }
+  } catch (err) {
+    console.warn('Auto pickup transition error:', err);
+  }
+}
+
 export const hybridTransactionRepo = {
   async getNextTicketId(): Promise<string> {
     if (isSupabaseConfigured() && supabaseAdmin) {
@@ -316,20 +386,7 @@ export const hybridTransactionRepo = {
 
   async getAll(filter?: { status?: string; user_id?: string }): Promise<BorrowingTransaction[]> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      // Auto-update active overdue transactions whose expected_return_date has passed
-      const nowIso = new Date().toISOString();
-      try {
-        await supabaseAdmin
-          .from('borrowing_transactions')
-          .update({ status: 'Overdue' })
-          .not('expected_return_date', 'is', null)
-          .lt('expected_return_date', nowIso)
-          .neq('status', 'Returned')
-          .neq('status', 'Rejected')
-          .neq('status', 'Overdue');
-      } catch (err) {
-        console.warn('Auto overdue check error:', err);
-      }
+      await syncStatusesSupabase();
 
       let query = supabaseAdmin
         .from('borrowing_transactions')
@@ -386,21 +443,7 @@ export const hybridTransactionRepo = {
 
   async getByTicketId(ticketId: string): Promise<BorrowingTransaction | undefined> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      // Auto-update ticket if overdue
-      const nowIso = new Date().toISOString();
-      try {
-        await supabaseAdmin
-          .from('borrowing_transactions')
-          .update({ status: 'Overdue' })
-          .eq('ticket_id', ticketId)
-          .not('expected_return_date', 'is', null)
-          .lt('expected_return_date', nowIso)
-          .neq('status', 'Returned')
-          .neq('status', 'Rejected')
-          .neq('status', 'Overdue');
-      } catch (err) {
-        console.warn('Auto overdue check single error:', err);
-      }
+      await syncStatusesSupabase();
 
       const { data, error } = await supabaseAdmin
         .from('borrowing_transactions')

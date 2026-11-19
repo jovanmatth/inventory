@@ -380,6 +380,60 @@ function parseReturnMetadata(rejectionReason: string | null | undefined) {
   };
 }
 
+function syncStatusesSqlite() {
+  if (!db) return;
+  const nowIso = new Date().toISOString();
+
+  // 1. Auto-transition to Overdue when expected_return_date has passed
+  try {
+    db.prepare(`
+      UPDATE Borrowing_Transactions
+      SET status = 'Overdue'
+      WHERE expected_return_date IS NOT NULL
+        AND expected_return_date <= ?
+        AND status NOT IN ('Returned', 'Rejected', 'Overdue')
+    `).run(nowIso);
+  } catch {}
+
+  // 2. Auto-transition to Picked_Up when borrow_date (waktu ambil) has arrived
+  try {
+    const rows = db.prepare(`
+      SELECT ticket_id, user_id
+      FROM Borrowing_Transactions
+      WHERE status IN ('Approved', 'Ready_for_Pickup')
+        AND borrow_date <= ?
+        AND expected_return_date > ?
+    `).all(nowIso, nowIso) as { ticket_id: string; user_id: string }[];
+
+    for (const row of rows) {
+      const items = db.prepare(`
+        SELECT item_id, qty_borrowed
+        FROM Transaction_Items
+        WHERE ticket_id = ?
+      `).all(row.ticket_id) as { item_id: string; qty_borrowed: number }[];
+
+      for (const it of items) {
+        const item = db.prepare(`SELECT * FROM Inventory WHERE item_id = ?`).get(it.item_id) as any;
+        if (item) {
+          const newQty = Math.max(0, item.qty - it.qty_borrowed);
+          db.prepare(`
+            UPDATE Inventory
+            SET qty = ?, status = ?
+            WHERE item_id = ?
+          `).run(newQty, newQty === 0 ? 'Borrowed' : item.status, it.item_id);
+
+          db.prepare(`
+            INSERT INTO Inventory_History (log_id, item_id, action_type, qty_changed, timestamp, performed_by)
+            VALUES (?, ?, 'Stock_Out', ?, ?, ?)
+          `).run(`LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`, it.item_id, -it.qty_borrowed, nowIso, row.user_id);
+        }
+      }
+
+      db.prepare(`UPDATE Borrowing_Transactions SET status = 'Picked_Up' WHERE ticket_id = ?`).run(row.ticket_id);
+    }
+  } catch {}
+}
+
 export const transactionRepo = {
   getNextTicketId(): string {
     if (!db) return 'PGE-0001';
@@ -397,15 +451,7 @@ export const transactionRepo = {
   getAll(filter?: { status?: string; user_id?: string }): BorrowingTransaction[] {
     if (!db) return [];
     try {
-      try {
-        db.prepare(`
-          UPDATE Borrowing_Transactions
-          SET status = 'Overdue'
-          WHERE expected_return_date IS NOT NULL
-            AND expected_return_date < ?
-            AND status NOT IN ('Returned', 'Rejected', 'Overdue')
-        `).run(new Date().toISOString());
-      } catch {}
+      syncStatusesSqlite();
 
       let sql = `
         SELECT t.*, u.name as user_name, u.email as user_email
@@ -442,16 +488,7 @@ export const transactionRepo = {
   getByTicketId(ticketId: string): BorrowingTransaction | undefined {
     if (!db) return undefined;
     try {
-      try {
-        db.prepare(`
-          UPDATE Borrowing_Transactions
-          SET status = 'Overdue'
-          WHERE ticket_id = ?
-            AND expected_return_date IS NOT NULL
-            AND expected_return_date < ?
-            AND status NOT IN ('Returned', 'Rejected', 'Overdue')
-        `).run(ticketId, new Date().toISOString());
-      } catch {}
+      syncStatusesSqlite();
 
       const row = db.prepare(`
         SELECT t.*, u.name as user_name, u.email as user_email

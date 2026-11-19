@@ -1256,18 +1256,27 @@ function UserDashboardContent() {
                     const isOverdue =
                       tx.status === 'Overdue' ||
                       (!!tx.expected_return_date &&
-                        new Date(tx.expected_return_date!).getTime() < Date.now() &&
+                        new Date(tx.expected_return_date!).getTime() <= Date.now() &&
                         tx.status !== 'Returned' &&
                         tx.status !== 'Rejected');
+
+                    const isPickupTimeArrived =
+                      (tx.status === 'Ready_for_Pickup' || tx.status === 'Approved') &&
+                      new Date(tx.borrow_date).getTime() <= Date.now();
+
+                    const displayStatus = isOverdue
+                      ? 'Overdue'
+                      : isPickupTimeArrived || tx.status === 'Picked_Up'
+                        ? 'Picked_Up'
+                        : tx.status;
 
                     return (
                       <div
                         key={tx.ticket_id}
-                        className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${
-                          isOverdue && tx.status !== 'Returned'
-                            ? 'bg-red-50/40 border-red-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}
+                        className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${isOverdue && tx.status !== 'Returned'
+                          ? 'bg-red-50/40 border-red-200'
+                          : 'bg-slate-50 border-slate-200'
+                          }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -1286,23 +1295,30 @@ function UserDashboardContent() {
                                 <Clock className="w-3 h-3 text-amber-700" />
                                 Menunggu Approval Pengembalian
                               </span>
-                            ) : isOverdue && tx.status !== 'Returned' ? (
+                            ) : displayStatus === 'Overdue' && tx.status !== 'Returned' ? (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3 text-red-600" />
                                 Overdue (Terlambat)
                               </span>
+                            ) : displayStatus === 'Picked_Up' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-300">
+                                Sedang Dipinjam
+                              </span>
+                            ) : displayStatus === 'Approved' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                {tx.transaction_type === 'Reservation' ? 'Terjadwal (Disetujui)' : 'Approved'}
+                              </span>
                             ) : (
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${tx.status === 'Approved' || tx.status === 'Ready_for_Pickup'
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : tx.status === 'Picked_Up'
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  tx.status === 'Ready_for_Pickup'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-300'
                                     : tx.status === 'Pending_Approval' || tx.status === 'In_Queue'
                                       ? 'bg-amber-100 text-amber-800 border border-amber-300'
                                       : tx.status === 'Returned'
                                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                                         : 'bg-red-100 text-red-800 border border-red-300'
-                                  }`}
+                                }`}
                               >
                                 {tx.status}
                               </span>
@@ -1326,86 +1342,85 @@ function UserDashboardContent() {
                             )}
                           </div>
 
-                        {/* Return Rejection Warning Note */}
-                        {tx.return_rejection_note && (
-                          <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded-lg text-red-800 text-[11px] font-medium flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                            <span>Pengembalian Ditolak Staf: {tx.return_rejection_note}. Silakan unggah foto ulang.</span>
-                          </div>
-                        )}
+                          {/* Return Rejection Warning Note */}
+                          {tx.return_rejection_note && (
+                            <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded-lg text-red-800 text-[11px] font-medium flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <span>Pengembalian Ditolak Staf: {tx.return_rejection_note}. Silakan unggah foto ulang.</span>
+                            </div>
+                          )}
 
-                        {/* Items */}
-                        <div className="pt-1.5 flex flex-wrap gap-1.5">
-                          {tx.items?.map((it) => (
-                            <span key={it.id} className="text-[10px] bg-white border px-2 py-0.5 rounded text-slate-800 font-medium">
-                              {it.item_name} ({it.qty_borrowed} unit)
+                          {/* Items */}
+                          <div className="pt-1.5 flex flex-wrap gap-1.5">
+                            {tx.items?.map((it) => (
+                              <span key={it.id} className="text-[10px] bg-white border px-2 py-0.5 rounded text-slate-800 font-medium">
+                                {it.item_name} ({it.qty_borrowed} unit)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end md:self-center flex-wrap justify-end">
+                          <button
+                            onClick={() => setSelectedTicket(tx)}
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Detail & QR</span>
+                          </button>
+
+                          {/* Return Action Buttons */}
+                          {(tx.status === 'Picked_Up' || tx.status === 'Overdue') && (
+                            <>
+                              {tx.is_return_pending ? (
+                                <button
+                                  onClick={() => handleSelectTicketForReturn(tx)}
+                                  className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-amber-700" />
+                                  <span>Lihat Status Pengembalian</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleSelectTicketForReturn(tx)}
+                                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Kembalikan Barang</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          {/* If Returned and has proof photo */}
+                          {tx.status === 'Returned' && tx.return_proof_url && (
+                            <button
+                              onClick={() => setZoomProofUrl(tx.return_proof_url!)}
+                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Foto Bukti</span>
+                            </button>
+                          )}
+
+                          {/* Can only cancel if NOT approved yet */}
+                          {(tx.status === 'Pending_Approval' || tx.status === 'In_Queue' || tx.status === 'Rejected') ? (
+                            <button
+                              onClick={() => setTicketToDelete(tx)}
+                              className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+                              title="Batalkan / Hapus Tiket"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Batalkan</span>
+                            </button>
+                          ) : tx.status !== 'Returned' && (
+                            <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg font-medium">
+                              Terkunci (Disetujui)
                             </span>
-                          ))}
+                          )}
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2 self-end md:self-center flex-wrap justify-end">
-                        <button
-                          onClick={() => setSelectedTicket(tx)}
-                          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Detail & QR</span>
-                        </button>
-
-                        {/* Return Action Buttons */}
-                        {(tx.status === 'Picked_Up' || tx.status === 'Overdue') && (
-                          <>
-                            {tx.is_return_pending ? (
-                              <button
-                                onClick={() => handleSelectTicketForReturn(tx)}
-                                className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-amber-700" />
-                                <span>Lihat Status Pengembalian</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleSelectTicketForReturn(tx)}
-                                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                <span>Kembalikan Barang</span>
-                              </button>
-                            )}
-                          </>
-                        )}
-
-                        {/* If Returned and has proof photo */}
-                        {tx.status === 'Returned' && tx.return_proof_url && (
-                          <button
-                            onClick={() => setZoomProofUrl(tx.return_proof_url!)}
-                            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Foto Bukti</span>
-                          </button>
-                        )}
-
-                        {/* Can only cancel if NOT approved yet */}
-                        {(tx.status === 'Pending_Approval' || tx.status === 'In_Queue' || tx.status === 'Rejected') ? (
-                          <button
-                            onClick={() => setTicketToDelete(tx)}
-                            className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
-                            title="Batalkan / Hapus Tiket"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Batalkan</span>
-                          </button>
-                        ) : tx.status !== 'Returned' && (
-                          <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg font-medium">
-                            Terkunci (Disetujui)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    ))}
                 </div>
               );
             })()}
@@ -1989,9 +2004,19 @@ function UserDashboardContent() {
               const isTicketOverdue =
                 selectedTicket.status === 'Overdue' ||
                 (!!selectedTicket.expected_return_date &&
-                  new Date(selectedTicket.expected_return_date!).getTime() < Date.now() &&
+                  new Date(selectedTicket.expected_return_date!).getTime() <= Date.now() &&
                   selectedTicket.status !== 'Returned' &&
                   selectedTicket.status !== 'Rejected');
+
+              const isPickupTimeArrived =
+                (selectedTicket.status === 'Ready_for_Pickup' || selectedTicket.status === 'Approved') &&
+                new Date(selectedTicket.borrow_date).getTime() <= Date.now();
+
+              const modalDisplayStatus = isTicketOverdue
+                ? 'Overdue'
+                : isPickupTimeArrived || selectedTicket.status === 'Picked_Up'
+                  ? 'Picked_Up'
+                  : selectedTicket.status;
 
               return (
                 <>
@@ -1999,16 +2024,20 @@ function UserDashboardContent() {
                     className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${
                       selectedTicket.status === 'Returned'
                         ? 'bg-emerald-100 text-emerald-800'
-                        : isTicketOverdue
+                        : modalDisplayStatus === 'Overdue'
                           ? 'bg-red-100 text-red-800 border border-red-300'
-                          : 'bg-pigeon-100 text-pigeon-800'
+                          : modalDisplayStatus === 'Picked_Up'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                            : 'bg-pigeon-100 text-pigeon-800'
                     }`}
                   >
                     {selectedTicket.status === 'Returned'
                       ? 'Riwayat Pengembalian Tiket'
-                      : isTicketOverdue
+                      : modalDisplayStatus === 'Overdue'
                         ? 'Tiket Terlambat (Overdue)'
-                        : 'Tiket Pengambilan Barang'}
+                        : modalDisplayStatus === 'Picked_Up'
+                          ? 'Tiket Pinjaman Aktif (Sedang Dipinjam)'
+                          : 'Tiket Pengambilan Barang'}
                   </div>
                   <h3 className="text-3xl font-black font-mono text-slate-900 tracking-tight">{selectedTicket.ticket_id}</h3>
                   <p className="text-xs text-slate-500 mt-1">
@@ -2017,20 +2046,24 @@ function UserDashboardContent() {
                       className={`font-bold ${
                         selectedTicket.status === 'Returned'
                           ? 'text-emerald-700'
-                          : isTicketOverdue
+                          : modalDisplayStatus === 'Overdue'
                             ? 'text-red-600'
-                            : 'text-pigeon-700'
+                            : modalDisplayStatus === 'Picked_Up'
+                              ? 'text-blue-700'
+                              : 'text-pigeon-700'
                       }`}
                     >
                       {selectedTicket.status === 'Returned'
                         ? 'Returned (Selesai & Ditutup)'
-                        : isTicketOverdue
+                        : modalDisplayStatus === 'Overdue'
                           ? 'Overdue (Melewati Batas Pengembalian)'
-                          : selectedTicket.status}
+                          : modalDisplayStatus === 'Picked_Up'
+                            ? 'Picked_Up (Sedang Dipinjam)'
+                            : selectedTicket.status}
                     </span>
                   </p>
 
-                  {isTicketOverdue && selectedTicket.status !== 'Returned' && (
+                  {modalDisplayStatus === 'Overdue' && selectedTicket.status !== 'Returned' && (
                     <div className="mt-2.5 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-1.5 text-left">
                       <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                       <span>Batas waktu pengembalian telah lewat! Harap segera kembalikan barang ke staf lab.</span>
