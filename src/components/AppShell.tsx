@@ -22,6 +22,7 @@ import {
   Shield,
   UserCheck,
   ArrowRightLeft,
+  Clock,
 } from 'lucide-react';
 import { User, UserRole } from '@/types';
 
@@ -199,6 +200,12 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
       name: 'Pengembalian Barang',
       href: '/user?tab=return',
       icon: RotateCcw,
+      roles: ['User'],
+    },
+    {
+      name: 'Riwayat Tiket',
+      href: '/user?tab=history',
+      icon: Clock,
       roles: ['User'],
     },
   ];

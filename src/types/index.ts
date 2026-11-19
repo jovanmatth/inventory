@@ -65,6 +65,11 @@ export interface BorrowingTransaction {
   return_requested_at?: string | null;
   is_return_pending?: boolean;
   return_rejection_note?: string | null;
+  returned_at?: string | null;
+  received_by?: string | null;
+  returned_condition?: ReturnedCondition | null;
+  resolution_status?: ResolutionStatus | null;
+  penalty?: string | null;
   // Joins
   user_name?: string;
   user_email?: string;

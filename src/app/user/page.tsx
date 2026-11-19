@@ -80,6 +80,7 @@ function UserDashboardContent() {
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [ticketTabFilter, setTicketTabFilter] = useState<'active' | 'history'>('active');
   const [zoomProofUrl, setZoomProofUrl] = useState<string | null>(null);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   // Sync selectedReturnTx with refreshed transactions
   useEffect(() => {
@@ -336,6 +337,7 @@ function UserDashboardContent() {
       activeTab === 'reserve' ? 'Reservasi Terjadwal' :
       activeTab === 'tickets' ? 'Tiket Saya (PGE-XXXX)' :
       activeTab === 'return' ? 'Pengembalian Barang' :
+      activeTab === 'history' ? 'Riwayat Tiket' :
       'Peminjaman Saya'
     }>
       {/* Toast Alert */}
@@ -387,7 +389,7 @@ function UserDashboardContent() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-pigeon-50 border border-pigeon-200 text-pigeon-800 rounded-lg text-xs font-bold shadow-sm"
           >
             <Ticket className="w-3.5 h-3.5 text-pigeon-600" />
-            <span>Tiket Aktif ({transactions.length})</span>
+            <span>Tiket Aktif ({transactions.filter((t) => t.status !== 'Returned').length})</span>
           </button>
         </div>
       </div>
@@ -398,8 +400,9 @@ function UserDashboardContent() {
           { id: 'borrow', label: 'Peminjaman Langsung', icon: ShoppingBag },
           { id: 'reserve', label: 'Reservasi Terjadwal', icon: CalendarCheck },
           { id: 'inventory', label: 'Katalog Barang', icon: Boxes },
-          { id: 'tickets', label: 'Tiket Saya (PGE-XXXX)', icon: Ticket, count: transactions.length },
+          { id: 'tickets', label: 'Tiket Aktif', icon: Ticket, count: transactions.filter((t) => t.status !== 'Returned').length },
           { id: 'return', label: 'Pengembalian Barang', icon: RotateCcw },
+          { id: 'history', label: 'Riwayat Tiket', icon: Clock, count: transactions.filter((t) => t.status === 'Returned').length },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -892,7 +895,7 @@ function UserDashboardContent() {
           {/* Quick Select from Active Borrowed Tickets */}
           {(() => {
             const activeBorrowed = transactions.filter(
-              (t) => t.status === 'Picked_Up' || t.status === 'Overdue' || t.is_return_pending
+              (t) => (t.status === 'Picked_Up' || t.status === 'Overdue' || t.is_return_pending) && t.status !== 'Returned'
             );
 
             return (
@@ -983,7 +986,12 @@ function UserDashboardContent() {
                     <span className="font-mono font-black text-slate-900 text-sm">{selectedReturnTx.ticket_id}</span>
                     <p className="text-xs text-slate-600 font-medium">Peminjam: {selectedReturnTx.user_name}</p>
                   </div>
-                  {selectedReturnTx.is_return_pending ? (
+                  {selectedReturnTx.status === 'Returned' ? (
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-emerald-600" />
+                      Status: Returned (Selesai)
+                    </span>
+                  ) : selectedReturnTx.is_return_pending ? (
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Clock className="w-3 h-3 text-amber-700" />
                       Menunggu Approval
@@ -1018,8 +1026,76 @@ function UserDashboardContent() {
                 </div>
               </div>
 
-              {/* Card 2: Return Status (Pending Approval vs Form Upload) */}
-              {selectedReturnTx.is_return_pending ? (
+              {/* Card 2: Return Status (Returned vs Pending Approval vs Form Upload) */}
+              {selectedReturnTx.status === 'Returned' ? (
+                <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs sm:text-sm">
+                      <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <span>Tiket Telah Selesai & Ditutup</span>
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-bold rounded-full">
+                      Status: Returned
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-emerald-800">
+                    Barang fisik telah dikembalikan dan diverifikasi serta disetujui staf ICT Lab. Seluruh kewajiban peminjaman untuk tiket ini telah selesai dan tiket telah ditutup.
+                  </p>
+
+                  {selectedReturnTx.return_proof_url && (
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-950 mb-1.5">Foto Bukti Fisik Pengembalian Terverifikasi:</p>
+                      <div className="relative inline-block group">
+                        <img
+                          src={selectedReturnTx.return_proof_url}
+                          alt="Bukti Fisik Pengembalian"
+                          onClick={() => setZoomProofUrl(selectedReturnTx.return_proof_url!)}
+                          className="w-48 h-32 object-cover rounded-xl border border-emerald-300 shadow-sm cursor-zoom-in group-hover:opacity-90 transition-opacity"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setZoomProofUrl(selectedReturnTx.return_proof_url!)}
+                          className="absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1 transition-opacity cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" /> Perbesar Foto
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-3 border-t border-emerald-200/70 text-xs flex flex-wrap gap-4 text-emerald-800">
+                    {selectedReturnTx.returned_at && (
+                      <p><span className="font-semibold text-emerald-950">Waktu Selesai:</span> {new Date(selectedReturnTx.returned_at).toLocaleString('id-ID')}</p>
+                    )}
+                    {selectedReturnTx.returned_condition && (
+                      <p><span className="font-semibold text-emerald-950">Kondisi Barang:</span> {selectedReturnTx.returned_condition}</p>
+                    )}
+                    {selectedReturnTx.received_by && (
+                      <p><span className="font-semibold text-emerald-950">Diterima Oleh:</span> {selectedReturnTx.received_by}</p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTicket(selectedReturnTx)}
+                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Buka Detail Tiket</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('history')}
+                      className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Clock className="w-4 h-4 text-slate-500" />
+                      <span>Buka Riwayat Tiket</span>
+                    </button>
+                  </div>
+                </div>
+              ) : selectedReturnTx.is_return_pending ? (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
                   <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
                     <Clock className="w-4 h-4 text-amber-600 shrink-0" />
@@ -1193,6 +1269,156 @@ function UserDashboardContent() {
           )}
         </div>
       )}
+      {/* TAB: HISTORY / RIWAYAT TIKET */}
+      {activeTab === 'history' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-pigeon-600" />
+                <span>Riwayat Tiket & Pengembalian</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Daftar tiket peminjaman yang telah selesai dikembalikan dan diverifikasi oleh staf ICT Lab.
+              </p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari Ticket ID atau tujuan..."
+                value={historySearchQuery}
+                onChange={(e) => setHistorySearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-pigeon-500"
+              />
+            </div>
+          </div>
+
+          {(() => {
+            const historyTxs = transactions
+              .filter((t) => t.status === 'Returned')
+              .filter((t) => {
+                if (!historySearchQuery.trim()) return true;
+                const q = historySearchQuery.toLowerCase();
+                return (
+                  t.ticket_id.toLowerCase().includes(q) ||
+                  t.purpose.toLowerCase().includes(q) ||
+                  t.items?.some((it) => it.item_name?.toLowerCase().includes(q))
+                );
+              })
+              .sort((a, b) => {
+                const timeA = a.returned_at ? new Date(a.returned_at).getTime() : new Date(a.borrow_date).getTime();
+                const timeB = b.returned_at ? new Date(b.returned_at).getTime() : new Date(b.borrow_date).getTime();
+                return timeB - timeA;
+              });
+
+            if (historyTxs.length === 0) {
+              return (
+                <div className="py-12 text-center text-slate-400">
+                  <Clock className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm font-semibold text-slate-700">
+                    {historySearchQuery ? 'Tidak ada riwayat tiket yang cocok' : 'Belum Ada Riwayat Tiket'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {historySearchQuery
+                      ? 'Coba gunakan kata kunci pencarian yang lain.'
+                      : 'Tiket yang telah selesai dikembalikan dan diverifikasi staf akan tercatat di sini.'}
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {historyTxs.map((tx) => (
+                  <div
+                    key={tx.ticket_id}
+                    onClick={() => setSelectedTicket(tx)}
+                    className="p-4 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-all cursor-pointer shadow-sm group flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-slate-900 text-base">{tx.ticket_id}</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-600" />
+                          Returned (Selesai)
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-800 font-medium">
+                        <span className="text-slate-500">Tujuan:</span> {tx.purpose}
+                      </p>
+
+                      <div className="text-[11px] text-slate-500 flex flex-wrap gap-4">
+                        <span>Dipinjam: {new Date(tx.borrow_date).toLocaleDateString('id-ID')}</span>
+                        {tx.returned_at ? (
+                          <span className="text-emerald-700 font-semibold">
+                            Dikembalikan: {new Date(tx.returned_at).toLocaleString('id-ID')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">Durasi: {tx.duration}</span>
+                        )}
+                        {tx.returned_condition && (
+                          <span className="text-slate-600">
+                            Kondisi: <span className="font-semibold text-slate-800">{tx.returned_condition}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Items tags */}
+                      <div className="pt-1 flex flex-wrap gap-1.5">
+                        {tx.items?.map((it) => (
+                          <span
+                            key={it.id}
+                            className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700 font-medium"
+                          >
+                            {it.item_name} ({it.qty_borrowed} unit)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Thumbnail of proof + Action buttons */}
+                    <div className="flex items-center gap-3 self-end md:self-center shrink-0">
+                      {tx.return_proof_url && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setZoomProofUrl(tx.return_proof_url!);
+                          }}
+                          className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shadow-sm shrink-0 cursor-zoom-in group/img"
+                          title="Klik untuk perbesar bukti pengembalian"
+                        >
+                          <img
+                            src={tx.return_proof_url}
+                            alt="Bukti Pengembalian"
+                            className="w-full h-full object-cover group-hover/img:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/20 group-hover/img:bg-black/40 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity">
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTicket(tx);
+                        }}
+                        className="px-3.5 py-2 bg-slate-900 group-hover:bg-pigeon-600 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Lihat Detail</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
       </AppShell>
 
       {/* TICKET MODAL - MOVED OUTSIDE APPSHELL WITH Z-[9999] AND MULTI-TOUCH/CLICK/ESC SUPPORT */}
@@ -1228,22 +1454,78 @@ function UserDashboardContent() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="inline-block px-3 py-1 bg-pigeon-100 text-pigeon-800 rounded-full font-bold text-xs uppercase tracking-wider mb-2">
-              Tiket Pengambilan Barang
+            <div className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${
+              selectedTicket.status === 'Returned'
+                ? 'bg-emerald-100 text-emerald-800'
+                : 'bg-pigeon-100 text-pigeon-800'
+            }`}>
+              {selectedTicket.status === 'Returned' ? 'Riwayat Pengembalian Tiket' : 'Tiket Pengambilan Barang'}
             </div>
             <h3 className="text-3xl font-black font-mono text-slate-900 tracking-tight">{selectedTicket.ticket_id}</h3>
-            <p className="text-xs text-slate-500 mt-1">Status: <span className="font-bold text-pigeon-700">{selectedTicket.status}</span></p>
+            <p className="text-xs text-slate-500 mt-1">
+              Status:{' '}
+              <span className={`font-bold ${
+                selectedTicket.status === 'Returned' ? 'text-emerald-700' : 'text-pigeon-700'
+              }`}>
+                {selectedTicket.status === 'Returned' ? 'Returned (Selesai & Ditutup)' : selectedTicket.status}
+              </span>
+            </p>
 
-            <div className="my-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-2">
+            <div className="my-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-2 max-h-[50vh] overflow-y-auto">
               <p><span className="text-slate-500">Peminjam:</span> <span className="font-bold text-slate-800">{selectedTicket.user_name}</span></p>
               <p><span className="text-slate-500">Tujuan:</span> {selectedTicket.purpose}</p>
-              <p>
-                <span className="text-slate-500">Batas Pengembalian:</span>{' '}
-                <span className="font-bold text-red-600">
-                  {formatDueDateTime(selectedTicket.expected_return_date)}
-                </span>
-              </p>
-              <div className="pt-2 border-t">
+              <p><span className="text-slate-500">Waktu Pinjam:</span> {new Date(selectedTicket.borrow_date).toLocaleString('id-ID')}</p>
+              {selectedTicket.status === 'Returned' ? (
+                <>
+                  {selectedTicket.returned_at && (
+                    <p><span className="text-slate-500">Waktu Pengembalian:</span> <span className="font-bold text-emerald-700">{new Date(selectedTicket.returned_at).toLocaleString('id-ID')}</span></p>
+                  )}
+                  {selectedTicket.returned_condition && (
+                    <p><span className="text-slate-500">Kondisi Barang:</span> <span className="font-bold text-slate-800">{selectedTicket.returned_condition}</span></p>
+                  )}
+                  {selectedTicket.received_by && (
+                    <p><span className="text-slate-500">Diverifikasi Oleh:</span> <span className="font-bold text-slate-800">{selectedTicket.received_by}</span></p>
+                  )}
+                  {selectedTicket.resolution_status && (
+                    <p><span className="text-slate-500">Status Resolusi:</span> <span className="font-bold text-slate-800">{selectedTicket.resolution_status}</span></p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  <span className="text-slate-500">Batas Pengembalian:</span>{' '}
+                  <span className="font-bold text-red-600">
+                    {formatDueDateTime(selectedTicket.expected_return_date)}
+                  </span>
+                </p>
+              )}
+
+              {/* Photo Proof thumbnail */}
+              {selectedTicket.return_proof_url && (
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>Foto Bukti Fisik:</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Klik untuk perbesar</span>
+                  </p>
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoomProofUrl(selectedTicket.return_proof_url!);
+                    }}
+                    className="relative rounded-xl overflow-hidden border border-slate-200 cursor-zoom-in group"
+                  >
+                    <img
+                      src={selectedTicket.return_proof_url}
+                      alt="Bukti Serah Terima"
+                      className="w-full max-h-36 object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center text-white text-xs font-semibold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="w-4 h-4" /> Lihat Foto Penuh
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-200">
                 <p className="font-bold text-slate-700 mb-1">Barang Tertera:</p>
                 {selectedTicket.items?.map((it) => (
                   <p key={it.id} className="text-slate-600">• {it.item_name} ({it.qty_borrowed} unit)</p>
@@ -1252,10 +1534,17 @@ function UserDashboardContent() {
             </div>
 
             <p className="text-[11px] text-slate-400 mb-4">
-              Tunjukkan layar ini kepada Admin / Supervisor ICT Lab 1 atau Lab 2 untuk serah terima barang fisik.
+              {selectedTicket.status === 'Returned'
+                ? 'Tiket ini telah selesai diproses dan seluruh barang telah diverifikasi kembali ke inventaris lab.'
+                : 'Tunjukkan layar ini kepada Admin / Supervisor ICT Lab 1 atau Lab 2 untuk serah terima barang fisik.'}
             </p>
 
-            {(selectedTicket.status === 'Pending_Approval' ||
+            {selectedTicket.status === 'Returned' ? (
+              <div className="w-full mb-2.5 py-2.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold rounded-xl flex items-center justify-center gap-1.5">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Tiket Selesai & Ditutup</span>
+              </div>
+            ) : (selectedTicket.status === 'Pending_Approval' ||
               selectedTicket.status === 'In_Queue' ||
               selectedTicket.status === 'Rejected') ? (
               <button
@@ -1297,7 +1586,7 @@ function UserDashboardContent() {
               }}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-sm select-none"
             >
-              Tutup Tiket
+              {selectedTicket.status === 'Returned' ? 'Tutup Detail' : 'Tutup Tiket'}
             </button>
           </div>
         </div>

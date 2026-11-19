@@ -252,6 +252,11 @@ export function parseReturnMetadata(rejectionReason: string | null | undefined) 
   let return_requested_at: string | null = null;
   let is_return_pending = false;
   let return_rejection_note: string | null = null;
+  let returned_at: string | null = null;
+  let received_by: string | null = null;
+  let returned_condition: any = null;
+  let resolution_status: any = null;
+  let penalty: string | null = null;
 
   if (rejectionReason && typeof rejectionReason === 'string' && rejectionReason.trim().startsWith('{')) {
     try {
@@ -266,6 +271,11 @@ export function parseReturnMetadata(rejectionReason: string | null | undefined) 
       } else if (parsed.type === 'RETURNED') {
         return_proof_url = parsed.proof_url || null;
         return_notes = parsed.notes || null;
+        returned_at = parsed.returned_at || null;
+        received_by = parsed.received_by || null;
+        returned_condition = parsed.returned_condition || null;
+        resolution_status = parsed.resolution_status || null;
+        penalty = parsed.penalty || null;
       }
     } catch (e) {}
   }
@@ -275,6 +285,11 @@ export function parseReturnMetadata(rejectionReason: string | null | undefined) 
     return_requested_at,
     is_return_pending,
     return_rejection_note,
+    returned_at,
+    received_by,
+    returned_condition,
+    resolution_status,
+    penalty,
   };
 }
 
