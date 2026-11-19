@@ -33,7 +33,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { InventoryItem, BorrowingTransaction, User } from '@/types';
-import { calculateDueDateLocal, formatDueDateTime } from '@/lib/date-utils';
+import { calculateDueDateLocal, formatDueDateTime, getDefaultReservationPickup } from '@/lib/date-utils';
 
 const calculateDueDate = calculateDueDateLocal;
 
@@ -48,17 +48,37 @@ function UserDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Cart state
+  // Direct Borrow state
   const [cart, setCart] = useState<{ item: InventoryItem; qty: number }[]>([]);
   const [purpose, setPurpose] = useState('');
   const [duration, setDuration] = useState('1 Hari');
   const [returnDate, setReturnDate] = useState(() => calculateDueDate('1 Hari'));
   const [transactionType, setTransactionType] = useState<'Direct_Borrow' | 'Reservation'>('Direct_Borrow');
 
+  // Scheduled Reservation state
+  const [reserveCart, setReserveCart] = useState<{ item: InventoryItem; qty: number }[]>([]);
+  const [reservePurpose, setReservePurpose] = useState('');
+  const [reservePickupDate, setReservePickupDate] = useState(() => getDefaultReservationPickup());
+  const [reserveDuration, setReserveDuration] = useState('1 Hari');
+  const [reserveReturnDate, setReserveReturnDate] = useState(() => calculateDueDate('1 Hari', getDefaultReservationPickup()));
+
   const handleDurationChange = (newDur: string) => {
     setDuration(newDur);
     const autoDue = calculateDueDate(newDur);
     setReturnDate(autoDue);
+  };
+
+  const handleReserveDurationChange = (newDur: string, pickup?: string) => {
+    setReserveDuration(newDur);
+    const base = pickup || reservePickupDate;
+    const autoDue = calculateDueDate(newDur, base);
+    setReserveReturnDate(autoDue);
+  };
+
+  const handleReservePickupChange = (newPickup: string) => {
+    setReservePickupDate(newPickup);
+    const autoDue = calculateDueDate(reserveDuration, newPickup);
+    setReserveReturnDate(autoDue);
   };
 
   // Search & Filter
@@ -312,6 +332,80 @@ function UserDashboardContent() {
     }
   };
 
+  const handleAddToReserveCart = (item: InventoryItem) => {
+    if (currentUser?.penalty_status === 'Restricted_Temp' || currentUser?.penalty_status === 'Restricted_1_Week') {
+      showNotification('Akun Anda sedang dalam masa pembatasan sanksi. Tidak dapat mereservasi barang.', 'error');
+      return;
+    }
+    if (item.qty <= 0) {
+      showNotification('Stok barang sedang kosong', 'error');
+      return;
+    }
+    const existing = reserveCart.find((c) => c.item.item_id === item.item_id);
+    if (existing) {
+      if (existing.qty >= item.qty) {
+        showNotification('Jumlah permintaan melebihi stok yang tersedia', 'error');
+        return;
+      }
+      setReserveCart(reserveCart.map((c) => (c.item.item_id === item.item_id ? { ...c, qty: c.qty + 1 } : c)));
+    } else {
+      setReserveCart([...reserveCart, { item, qty: 1 }]);
+    }
+    showNotification(`"${item.item_name}" dimasukkan ke daftar reservasi`);
+  };
+
+  const handleRemoveFromReserveCart = (itemId: string) => {
+    setReserveCart(reserveCart.filter((c) => c.item.item_id !== itemId));
+  };
+
+  const handleReserveCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reserveCart.length) {
+      showNotification('Pilih barang yang ingin direservasi terlebih dahulu', 'error');
+      return;
+    }
+    if (!currentUser) return;
+    if (submittingCheckout) return;
+    setSubmittingCheckout(true);
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.user_id,
+          transaction_type: 'Reservation',
+          purpose: reservePurpose,
+          borrow_date: reservePickupDate ? new Date(reservePickupDate).toISOString() : new Date().toISOString(),
+          duration: reserveDuration,
+          expected_return_date: reserveReturnDate ? new Date(reserveReturnDate).toISOString() : null,
+          items: reserveCart.map((c) => ({
+            item_id: c.item.item_id,
+            qty_borrowed: c.qty,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+
+      showNotification(data.message || 'Permohonan reservasi terjadwal berhasil diajukan!');
+      setReserveCart([]);
+      setReservePurpose('');
+      setReserveDuration('1 Hari');
+      const defaultPickup = getDefaultReservationPickup();
+      setReservePickupDate(defaultPickup);
+      setReserveReturnDate(calculateDueDate('1 Hari', defaultPickup));
+      setRefreshTrigger((v) => v + 1);
+      setActiveTab('tickets');
+      broadcastDataChange();
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    } finally {
+      setSubmittingCheckout(false);
+    }
+  };
+
   const handleDeleteTicket = async (ticketId: string) => {
     setDeletingTicket(true);
     try {
@@ -409,8 +503,8 @@ function UserDashboardContent() {
         {/* Navigation Tabs */}
         <div className="flex overflow-x-auto gap-2 pb-2 mb-6 border-b border-slate-200">
           {[
-            { id: 'borrow', label: 'Peminjaman Langsung', icon: ShoppingBag },
-            { id: 'reserve', label: 'Reservasi Terjadwal', icon: CalendarCheck },
+            { id: 'borrow', label: 'Peminjaman Langsung', icon: ShoppingBag, count: cart.length > 0 ? cart.length : undefined },
+            { id: 'reserve', label: 'Reservasi Terjadwal', icon: CalendarCheck, count: reserveCart.length > 0 ? reserveCart.length : undefined },
             { id: 'inventory', label: 'Katalog Barang', icon: Boxes },
             { id: 'tickets', label: 'Tiket Aktif', icon: Ticket, count: transactions.filter((t) => t.status !== 'Returned').length },
             { id: 'return', label: 'Pengembalian Barang', icon: RotateCcw },
@@ -444,217 +538,464 @@ function UserDashboardContent() {
           })}
         </div>
 
-        {/* TAB: BORROW / RESERVE */}
-        {(activeTab === 'borrow' || activeTab === 'reserve') && (
-          <div className="grid lg:grid-cols-12 gap-6">
-            {/* Items Selector */}
-            <div className="lg:col-span-7 space-y-4">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                  <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Cari laptop, proyektor, kabel..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-pigeon-500"
-                    />
-                  </div>
-                  <select
-                    value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                    className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700"
-                  >
-                    <option value="All">Semua Lab</option>
-                    <option value="ICT Lab 1">ICT Lab 1</option>
-                    <option value="ICT Lab 2">ICT Lab 2</option>
-                  </select>
+        {/* TAB: PEMINJAMAN LANGSUNG (INSTANT HARI INI) */}
+        {activeTab === 'borrow' && (
+          <div className="space-y-4">
+            <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <ShoppingBag className="w-5 h-5" />
                 </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Peminjaman Langsung (Instant / Hari Ini)</h3>
+                  <p className="text-xs text-slate-600">
+                    Pengambilan barang dilakukan hari ini langsung di ICT Lab setelah disetujui staf. Cocok untuk kebutuhan mengajar atau praktikum sekarang.
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-bold rounded-xl whitespace-nowrap self-start sm:self-auto">
+                ⚡ Serah Terima Langsung Hari Ini
+              </span>
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
-                  {filteredItems.map((item) => (
-                    <div
-                      key={item.item_id}
-                      className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                            item.status === 'Borrowed' || item.qty <= 0
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
-                        </div>
-                        <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
-                        <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">
-                          {item.qty > 0 ? (
-                            <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
-                          ) : (
-                            <span className="text-red-500">Stok habis</span>
-                          )}
-                        </span>
-                        <button
-                          onClick={() => handleAddToCart(item)}
-                          disabled={item.qty <= 0}
-                          className="px-3 py-1 bg-pigeon-600 hover:bg-pigeon-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40"
-                        >
-                          + Pilih
-                        </button>
-                      </div>
+            <div className="grid lg:grid-cols-12 gap-6">
+              {/* Items Selector */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                  <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari laptop, proyektor, kabel..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-pigeon-500"
+                      />
                     </div>
-                  ))}
+                    <select
+                      value={locationFilter}
+                      onChange={(e) => setLocationFilter(e.target.value)}
+                      className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700"
+                    >
+                      <option value="All">Semua Lab</option>
+                      <option value="ICT Lab 1">ICT Lab 1</option>
+                      <option value="ICT Lab 2">ICT Lab 2</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
+                    {filteredItems.map((item) => (
+                      <div
+                        key={item.item_id}
+                        className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                              item.status === 'Borrowed' || item.qty <= 0
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
+                          <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">
+                            {item.qty > 0 ? (
+                              <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
+                            ) : (
+                              <span className="text-red-500">Stok habis</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => handleAddToCart(item)}
+                            disabled={item.qty <= 0}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
+                          >
+                            + Pinjam
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Checkout & Cart Details Form */}
+              <div className="lg:col-span-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 sticky top-6">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4 text-emerald-600" />
+                      <span>Keranjang Pinjam Langsung ({cart.length})</span>
+                    </h3>
+                    {cart.length > 0 && (
+                      <button onClick={() => setCart([])} className="text-xs text-red-500 hover:underline cursor-pointer">
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="py-10 text-center text-slate-400 space-y-1">
+                      <ShoppingBag className="w-8 h-8 mx-auto text-slate-300" />
+                      <p className="text-xs font-semibold">Keranjang masih kosong</p>
+                      <p className="text-[11px]">Pilih barang di sebelah kiri untuk diajukan hari ini.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleCheckout} className="space-y-3">
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {cart.map((c) => (
+                          <div
+                            key={c.item.item_id}
+                            className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
+                              <span className="text-[10px] text-emerald-700 font-semibold">{c.item.location}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800">{c.qty} unit</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFromCart(c.item.item_id)}
+                                className="text-red-500 hover:text-red-700 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Tujuan Peminjaman (Wajib):
+                        </label>
+                        <textarea
+                          required
+                          rows={2}
+                          placeholder="Contoh: Praktikum Pemrograman Web / Ujian Praktik Sekolah..."
+                          value={purpose}
+                          onChange={(e) => setPurpose(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                        <span className="text-slate-500 font-medium">Jadwal Pengambilan:</span>
+                        <p className="font-bold text-slate-800">Hari Ini (Langsung saat staf ICT menyetujui)</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi Pinjam:</label>
+                          <select
+                            value={duration}
+                            onChange={(e) => handleDurationChange(e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer"
+                          >
+                            <optgroup label="Pilihan Hari (Jatuh Tempo 23:59)">
+                              <option value="1 Hari">1 Hari (Besok 23:59)</option>
+                              <option value="2 Hari">2 Hari</option>
+                              <option value="3 Hari">3 Hari</option>
+                              <option value="4 Hari">4 Hari</option>
+                              <option value="5 Hari">5 Hari (1 Pekan Kerja)</option>
+                              <option value="7 Hari">7 Hari (1 Minggu)</option>
+                              <option value="14 Hari">14 Hari (2 Minggu)</option>
+                            </optgroup>
+                            <optgroup label="Pilihan Jam (Hari Ini)">
+                              <option value="1 Jam">1 Jam</option>
+                              <option value="2 Jam">2 Jam</option>
+                              <option value="3 Jam">3 Jam</option>
+                              <option value="4 Jam">4 Jam</option>
+                              <option value="6 Jam">6 Jam</option>
+                              <option value="Hari Ini (23:59)">Hari Ini (s/d 23:59)</option>
+                            </optgroup>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kembali:</label>
+                          <input
+                            type="datetime-local"
+                            required
+                            value={returnDate}
+                            onChange={(e) => setReturnDate(e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {returnDate && (
+                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-1.5 font-medium">
+                          <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>
+                            Batas Kembali:{' '}
+                            <strong className="text-emerald-950 font-bold">
+                              {formatDueDateTime(returnDate)}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={submittingCheckout}
+                        className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {submittingCheckout && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{submittingCheckout ? 'Memproses Permohonan...' : 'Kirim Permohonan Peminjaman Langsung'}</span>
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Checkout & Cart Details Form */}
-            <div className="lg:col-span-5">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 sticky top-6">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                  <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-pigeon-600" />
-                    <span>Daftar Keranjang ({cart.length})</span>
-                  </h3>
-                  {cart.length > 0 && (
-                    <button onClick={() => setCart([])} className="text-xs text-red-500 hover:underline">
-                      Reset
-                    </button>
-                  )}
+        {/* TAB: RESERVASI TERJADWAL (BOOKING MASA DEPAN) */}
+        {activeTab === 'reserve' && (
+          <div className="space-y-4">
+            <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <CalendarCheck className="w-5 h-5" />
                 </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Reservasi Barang Terjadwal (Booking Masa Depan)</h3>
+                  <p className="text-xs text-slate-600">
+                    Pesan barang terlebih dahulu untuk penggunaan di hari mendatang (ujian, presentasi, atau praktikum terjadwal). Anda dapat menentukan kapan barang akan diambil dan berapa lama durasi peminjamannya.
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-indigo-100 border border-indigo-300 text-indigo-800 text-[11px] font-bold rounded-xl whitespace-nowrap self-start sm:self-auto">
+                📅 Booking & Penjadwalan Terencana
+              </span>
+            </div>
 
-                {cart.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400 space-y-1">
-                    <ShoppingBag className="w-8 h-8 mx-auto text-slate-300" />
-                    <p className="text-xs font-semibold">Keranjang masih kosong</p>
-                    <p className="text-[11px]">Pilih barang di sebelah kiri untuk diajukan.</p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleCheckout} className="space-y-3">
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                      {cart.map((c) => (
-                        <div
-                          key={c.item.item_id}
-                          className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
-                            <span className="text-[10px] text-emerald-700 font-semibold">{c.item.qty > 0 ? 'Tersedia' : 'Dipinjam'}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800">{c.qty} unit</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFromCart(c.item.item_id)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Tujuan Peminjaman (Wajib):
-                      </label>
-                      <textarea
-                        required
-                        rows={2}
-                        placeholder="Contoh: Praktikum Pemrograman Web / Ujian Praktik Sekolah..."
-                        value={purpose}
-                        onChange={(e) => setPurpose(e.target.value)}
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500"
+            <div className="grid lg:grid-cols-12 gap-6">
+              {/* Items Selector for Reservation */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                  <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari barang yang ingin direservasi..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
+                    <select
+                      value={locationFilter}
+                      onChange={(e) => setLocationFilter(e.target.value)}
+                      className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700"
+                    >
+                      <option value="All">Semua Lab</option>
+                      <option value="ICT Lab 1">ICT Lab 1</option>
+                      <option value="ICT Lab 2">ICT Lab 2</option>
+                    </select>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi Pinjam:</label>
-                        <select
-                          value={duration}
-                          onChange={(e) => handleDurationChange(e.target.value)}
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-medium cursor-pointer"
-                        >
-                          <optgroup label="Pilihan Hari (Jatuh Tempo 23:59)">
-                            <option value="1 Hari">1 Hari (Besok 23:59)</option>
-                            <option value="2 Hari">2 Hari</option>
-                            <option value="3 Hari">3 Hari</option>
-                            <option value="4 Hari">4 Hari</option>
-                            <option value="5 Hari">5 Hari (1 Pekan Kerja)</option>
-                            <option value="7 Hari">7 Hari (1 Minggu)</option>
-                            <option value="14 Hari">14 Hari (2 Minggu)</option>
-                          </optgroup>
-                          <optgroup label="Pilihan Jam (Hari Ini)">
-                            <option value="1 Jam">1 Jam</option>
-                            <option value="2 Jam">2 Jam</option>
-                            <option value="3 Jam">3 Jam</option>
-                            <option value="4 Jam">4 Jam</option>
-                            <option value="6 Jam">6 Jam</option>
-                            <option value="Hari Ini (23:59)">Hari Ini (s/d 23:59)</option>
-                          </optgroup>
-                        </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
+                    {filteredItems.map((item) => (
+                      <div
+                        key={item.item_id}
+                        className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                              item.status === 'Borrowed' || item.qty <= 0
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
+                          <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">
+                            {item.qty > 0 ? (
+                              <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
+                            ) : (
+                              <span className="text-red-500">Stok habis</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => handleAddToReserveCart(item)}
+                            disabled={item.qty <= 0}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
+                          >
+                            + Pilih Reservasi
+                          </button>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reservation Cart & Booking Form */}
+              <div className="lg:col-span-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 sticky top-6">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <CalendarCheck className="w-4 h-4 text-indigo-600" />
+                      <span>Daftar Reservasi ({reserveCart.length})</span>
+                    </h3>
+                    {reserveCart.length > 0 && (
+                      <button onClick={() => setReserveCart([])} className="text-xs text-red-500 hover:underline cursor-pointer">
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {reserveCart.length === 0 ? (
+                    <div className="py-10 text-center text-slate-400 space-y-1">
+                      <CalendarCheck className="w-8 h-8 mx-auto text-slate-300" />
+                      <p className="text-xs font-semibold">Daftar reservasi masih kosong</p>
+                      <p className="text-[11px]">Pilih barang di sebelah kiri untuk dibooking pada jadwal mendatang.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleReserveCheckout} className="space-y-3">
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {reserveCart.map((c) => (
+                          <div
+                            key={c.item.item_id}
+                            className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
+                              <span className="text-[10px] text-indigo-700 font-semibold">{c.item.location}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800">{c.qty} unit</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFromReserveCart(c.item.item_id)}
+                                className="text-red-500 hover:text-red-700 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kembali:</label>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Tujuan Reservasi (Wajib):
+                        </label>
+                        <textarea
+                          required
+                          rows={2}
+                          placeholder="Contoh: Praktikum Terjadwal Fisika / Presentasi Proyek Akhir..."
+                          value={reservePurpose}
+                          onChange={(e) => setReservePurpose(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      {/* Pickup Date & Time Setting */}
+                      <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+                        <label className="block text-xs font-bold text-indigo-950 flex items-center justify-between">
+                          <span>Kapan Barang Diambil (Rencana Ambil):</span>
+                          <span className="text-[10px] text-indigo-600 font-normal">Tanggal & Jam Ambil</span>
+                        </label>
                         <input
                           type="datetime-local"
                           required
-                          value={returnDate}
-                          onChange={(e) => setReturnDate(e.target.value)}
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500 font-mono"
+                          value={reservePickupDate}
+                          onChange={(e) => handleReservePickupChange(e.target.value)}
+                          className="w-full p-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 font-mono font-semibold"
                         />
+                        <p className="text-[10px] text-indigo-700">
+                          * Tentukan kapan Anda berencana datang ke ICT Lab untuk mengambil barang.
+                        </p>
                       </div>
-                    </div>
 
-                    {returnDate && (
-                      <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-1.5 font-medium">
-                        <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>
-                          Jatuh Tempo:{' '}
-                          <strong className="text-emerald-950 font-bold">
-                            {new Date(returnDate).toLocaleDateString('id-ID', {
-                              weekday: 'long',
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}{' '}
-                            pukul{' '}
-                            {new Date(returnDate).toLocaleTimeString('id-ID', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}{' '}
-                            WIB
-                          </strong>
-                        </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi Pinjam:</label>
+                          <select
+                            value={reserveDuration}
+                            onChange={(e) => handleReserveDurationChange(e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 font-medium cursor-pointer"
+                          >
+                            <optgroup label="Pilihan Hari (Jatuh Tempo 23:59)">
+                              <option value="1 Hari">1 Hari</option>
+                              <option value="2 Hari">2 Hari</option>
+                              <option value="3 Hari">3 Hari</option>
+                              <option value="4 Hari">4 Hari</option>
+                              <option value="5 Hari">5 Hari (1 Pekan Kerja)</option>
+                              <option value="7 Hari">7 Hari (1 Minggu)</option>
+                              <option value="14 Hari">14 Hari (2 Minggu)</option>
+                            </optgroup>
+                            <optgroup label="Pilihan Jam">
+                              <option value="1 Jam">1 Jam</option>
+                              <option value="2 Jam">2 Jam</option>
+                              <option value="3 Jam">3 Jam</option>
+                              <option value="4 Jam">4 Jam</option>
+                              <option value="6 Jam">6 Jam</option>
+                              <option value="Hari Ini (23:59)">Hari Ini (s/d 23:59)</option>
+                            </optgroup>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kembali:</label>
+                          <input
+                            type="datetime-local"
+                            required
+                            value={reserveReturnDate}
+                            onChange={(e) => setReserveReturnDate(e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
                       </div>
-                    )}
 
-                    <button
-                      type="submit"
-                      disabled={submittingCheckout}
-                      className="w-full mt-2 py-3 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      {submittingCheckout && <Loader2 className="w-4 h-4 animate-spin" />}
-                      <span>
-                        {submittingCheckout
-                          ? 'Memproses Permohonan...'
-                          : activeTab === 'reserve'
-                            ? 'Kirim Reservasi Terjadwal'
-                            : 'Kirim Permohonan Peminjaman'}
-                      </span>
-                    </button>
-                  </form>
-                )}
+                      {/* Scheduled Summary Card */}
+                      <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-[11px] text-indigo-900 space-y-1">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <CalendarCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span>
+                            Rencana Ambil: <strong>{formatDueDateTime(reservePickupDate)}</strong>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span>
+                            Batas Kembali: <strong className="text-red-700">{formatDueDateTime(reserveReturnDate)}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={submittingCheckout}
+                        className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {submittingCheckout && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{submittingCheckout ? 'Memproses Permohonan...' : 'Kirim Permohonan Reservasi Terjadwal'}</span>
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
             </div>
           </div>
