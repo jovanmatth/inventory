@@ -29,6 +29,7 @@ import {
   Camera,
   CheckCircle,
   X,
+  Loader2,
 } from 'lucide-react';
 import {
   User,
@@ -83,6 +84,50 @@ function AdminDashboardContent() {
   const [rejectReturnModalTx, setRejectReturnModalTx] = useState<BorrowingTransaction | null>(null);
   const [rejectReturnReason, setRejectReturnReason] = useState('');
   const [submittingRejectReturn, setSubmittingRejectReturn] = useState(false);
+  const [verifyReturnModalTx, setVerifyReturnModalTx] = useState<BorrowingTransaction | null>(null);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const returnFormRef = React.useRef<HTMLDivElement>(null);
+
+  const handleConfirmVerifyReturn = async () => {
+    if (!verifyReturnModalTx) return;
+    setSubmittingReturn(true);
+
+    let performerId = 'USR-001';
+    try {
+      const saved = localStorage.getItem('pigeon_last_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u?.user_id) performerId = u.user_id;
+      }
+    } catch {}
+
+    try {
+      const res = await fetch(`/api/transactions/${verifyReturnModalTx.ticket_id}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          returned_condition: returnedCondition,
+          return_date: new Date().toISOString(),
+          resolution_status: resolutionStatus,
+          received_by: performerId,
+          custom_penalty_note: customPenalty,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Gagal menyelesaikan pengembalian');
+
+      showNotification(data.message || 'Pengembalian barang berhasil disetujui & tiket ditutup');
+      setVerifyReturnModalTx(null);
+      setSelectedReturnTx(null);
+      setReturnTicketId('');
+      setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
 
   const handleRejectReturn = async () => {
     if (!rejectReturnModalTx) return;
@@ -366,6 +411,16 @@ function AdminDashboardContent() {
   const handleSubmitReturn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReturnTx) return;
+    setSubmittingReturn(true);
+
+    let performerId = 'USR-001';
+    try {
+      const saved = localStorage.getItem('pigeon_last_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u?.user_id) performerId = u.user_id;
+      }
+    } catch {}
 
     try {
       const res = await fetch(`/api/transactions/${selectedReturnTx.ticket_id}/return`, {
@@ -375,12 +430,12 @@ function AdminDashboardContent() {
           returned_condition: returnedCondition,
           return_date: new Date().toISOString(),
           resolution_status: resolutionStatus,
-          received_by: 'USR-001',
+          received_by: performerId,
           custom_penalty_note: customPenalty,
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message);
+      if (!res.ok || !data.success) throw new Error(data.message || 'Gagal menyelesaikan pengembalian');
 
       showNotification(data.message);
       setSelectedReturnTx(null);
@@ -389,6 +444,8 @@ function AdminDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setSubmittingReturn(false);
     }
   };
 
@@ -1106,10 +1163,12 @@ function AdminDashboardContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedReturnTx(tx);
-                              setReturnTicketId(tx.ticket_id);
+                              setVerifyReturnModalTx(tx);
+                              setReturnedCondition('Good');
+                              setResolutionStatus('Resolved');
+                              setCustomPenalty('');
                             }}
-                            className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                           >
                             <CheckCircle className="w-3.5 h-3.5" />
                             <span>Verifikasi & Selesaikan</span>
@@ -1140,8 +1199,8 @@ function AdminDashboardContent() {
           })()}
 
           {/* Section 2: Return Quality Check Form */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <h2 className="text-base font-bold text-slate-900 mb-1">Verifikasi Pengembalian & Perhitungan Sanksi</h2>
+          <div ref={returnFormRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 className="text-base font-bold text-slate-900 mb-1">Verifikasi Pengembalian & Perhitungan Sanksi (Form Manual)</h2>
             <p className="text-xs text-slate-500 mb-4">
               Lakukan Quality & Time Check pada barang yang dikembalikan. Sistem secara otomatis menghitung tingkat keterlambatan dan sanksi yang berlaku.
             </p>
@@ -1165,6 +1224,7 @@ function AdminDashboardContent() {
                   const found = transactions.find((t) => t.ticket_id === returnTicketId.trim());
                   if (found) {
                     setSelectedReturnTx(found);
+                    returnFormRef.current?.scrollIntoView({ behavior: 'smooth' });
                   } else {
                     showNotification('Tiket tidak ditemukan dalam data transaksi', 'error');
                   }
@@ -1280,17 +1340,28 @@ function AdminDashboardContent() {
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     type="button"
+                    disabled={submittingReturn}
                     onClick={() => setSelectedReturnTx(null)}
-                    className="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer"
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer transition-colors"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-pigeon-600 hover:bg-pigeon-700 active:bg-pigeon-800 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    disabled={submittingReturn}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Approve & Selesaikan Pengembalian (Tutup Tiket)</span>
+                    {submittingReturn ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Memproses Pengembalian...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Approve & Selesaikan Pengembalian (Tutup Tiket)</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1919,6 +1990,147 @@ function AdminDashboardContent() {
                 className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow-sm disabled:opacity-50"
               >
                 Kirim Penolakan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VERIFY RETURN APPROVAL MODAL */}
+      {verifyReturnModalTx && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-8 animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-black text-slate-900 text-base">{verifyReturnModalTx.ticket_id}</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    Menunggu Approval Pengembalian
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium mt-1">
+                  Peminjam: <strong className="text-slate-900">{verifyReturnModalTx.user_name}</strong> ({verifyReturnModalTx.user_email})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVerifyReturnModalTx(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Items list */}
+            <div>
+              <p className="text-xs font-bold text-slate-700 mb-1.5">Barang yang Dikembalikan:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {verifyReturnModalTx.items?.map((it) => (
+                  <span key={it.id} className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
+                    {it.item_name} ({it.qty_borrowed} unit)
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Return Proof Photo */}
+            {verifyReturnModalTx.return_proof_url && (
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-3">
+                <img
+                  src={verifyReturnModalTx.return_proof_url}
+                  alt="Bukti Pengembalian"
+                  onClick={() => setZoomProofUrl(verifyReturnModalTx.return_proof_url!)}
+                  className="w-24 h-18 object-cover rounded-xl border border-emerald-300 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                />
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Foto Bukti Serah Terima Dilampirkan
+                  </span>
+                  {verifyReturnModalTx.return_notes && (
+                    <p className="text-slate-600 text-[11px] italic">
+                      "{verifyReturnModalTx.return_notes}"
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setZoomProofUrl(verifyReturnModalTx.return_proof_url!)}
+                    className="text-pigeon-600 font-bold hover:underline text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye className="w-3 h-3" /> Perbesar Foto Bukti
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Quality Check & Resolution */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Kondisi Fisik Barang:</label>
+                <select
+                  value={returnedCondition}
+                  onChange={(e) => setReturnedCondition(e.target.value as ReturnedCondition)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="Good">Kondisi Baik (Good) — Tanpa Cacat</option>
+                  <option value="Damaged_Light">Rusak Ringan (Light Damage)</option>
+                  <option value="Damaged_Medium">Rusak Sedang (Medium Damage)</option>
+                  <option value="Damaged_Heavy">Rusak Berat (Heavy Damage)</option>
+                  <option value="Lost">Hilang (Lost)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Status Resolusi:</label>
+                <select
+                  value={resolutionStatus}
+                  onChange={(e) => setResolutionStatus(e.target.value as ResolutionStatus)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="Resolved">Resolved (Kembali ke Stok Inventaris)</option>
+                  <option value="Not_Resolved">Not Resolved (Butuh Tindak Lanjut)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Custom Penalty Note */}
+            <div>
+              <label className="block font-bold text-slate-800 mb-1 text-xs">Catatan Tambahan / Sanksi (Opsional):</label>
+              <input
+                type="text"
+                placeholder="Barang diterima lengkap dan berfungsi normal..."
+                value={customPenalty}
+                onChange={(e) => setCustomPenalty(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={submittingReturn}
+                onClick={handleConfirmVerifyReturn}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-colors"
+              >
+                {submittingReturn ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Memproses Verifikasi...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Setujui & Selesaikan Pengembalian</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={submittingReturn}
+                onClick={() => setVerifyReturnModalTx(null)}
+                className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+              >
+                Batal
               </button>
             </div>
           </div>

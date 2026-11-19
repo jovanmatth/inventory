@@ -22,6 +22,25 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
     }
 
+    if (tx.status === 'Returned') {
+      return NextResponse.json({ success: false, message: `Tiket ${ticketId} sudah diselesaikan / dikembalikan sebelumnya.` }, { status: 400 });
+    }
+
+    // Ensure received_by points to an existing user to satisfy DB foreign key
+    let validReceivedBy = received_by;
+    if (validReceivedBy) {
+      const u = await userRepo.getById(validReceivedBy);
+      if (!u) {
+        const allUsers = await userRepo.getAll();
+        const fallback = allUsers.find((x) => x.role === 'Admin' || x.role === 'Supervisor');
+        validReceivedBy = fallback?.user_id || 'USR-001';
+      }
+    } else {
+      const allUsers = await userRepo.getAll();
+      const fallback = allUsers.find((x) => x.role === 'Admin' || x.role === 'Supervisor');
+      validReceivedBy = fallback?.user_id || 'USR-001';
+    }
+
     const actualReturnDate = new Date(return_date || new Date().toISOString());
     let isLate = false;
     let lateDays = 0;
@@ -78,7 +97,7 @@ export async function POST(
       late_days: lateDays,
       penalty_type: penaltySummary,
       resolution_status: finalResolution,
-      received_by,
+      received_by: validReceivedBy,
     });
 
     // Update user penalty status if needed
@@ -115,12 +134,12 @@ export async function POST(
       proof_url: tx.return_proof_url || null,
       notes: tx.return_notes || null,
       returned_at: actualReturnDate.toISOString(),
-      received_by,
+      received_by: validReceivedBy,
       returned_condition,
       resolution_status: finalResolution,
       penalty: penaltySummary,
     });
-    await transactionRepo.updateStatus(ticketId, finalTxStatus, received_by, completedPayload);
+    await transactionRepo.updateStatus(ticketId, finalTxStatus, validReceivedBy, completedPayload);
 
     // Restore stock for Loan items if condition is Good or Resolved
     if (finalResolution === 'Resolved' && returned_condition !== 'Lost' && returned_condition !== 'Damaged_Heavy') {
@@ -141,7 +160,7 @@ export async function POST(
               action_type: 'Returned',
               qty_changed: it.qty_borrowed,
               timestamp: new Date().toISOString(),
-              performed_by: received_by,
+              performed_by: validReceivedBy,
             });
           }
         }

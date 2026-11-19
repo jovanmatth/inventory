@@ -472,7 +472,10 @@ export const hybridTransactionRepo = {
 export const hybridReturnRepo = {
   async create(record: ReturnPenaltyRecord): Promise<void> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      await supabaseAdmin.from('returns_and_penalties').insert(record);
+      const { error } = await supabaseAdmin.from('returns_and_penalties').insert(record);
+      if (error) {
+        console.warn('Supabase returns_and_penalties insert warning:', error.message);
+      }
     }
     sqliteReturnRepo.create(record);
   },
