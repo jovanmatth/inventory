@@ -390,7 +390,7 @@ function SupervisorDashboardContent() {
   });
 
   const pendingRequests = transactions.filter((t) => t.status === 'Pending_Approval' || t.status === 'In_Queue');
-  const activeLoans = transactions.filter((t) => t.status === 'Picked_Up' || t.status === 'Approved' || t.status === 'Ready_for_Pickup');
+  const activeLoans = transactions.filter((t) => t.status === 'Picked_Up' || t.status === 'Approved' || t.status === 'Ready_for_Pickup' || t.status === 'Overdue');
 
   return (
     <AppShell activeMenu={

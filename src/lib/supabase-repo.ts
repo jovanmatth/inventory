@@ -316,6 +316,21 @@ export const hybridTransactionRepo = {
 
   async getAll(filter?: { status?: string; user_id?: string }): Promise<BorrowingTransaction[]> {
     if (isSupabaseConfigured() && supabaseAdmin) {
+      // Auto-update active overdue transactions whose expected_return_date has passed
+      const nowIso = new Date().toISOString();
+      try {
+        await supabaseAdmin
+          .from('borrowing_transactions')
+          .update({ status: 'Overdue' })
+          .not('expected_return_date', 'is', null)
+          .lt('expected_return_date', nowIso)
+          .neq('status', 'Returned')
+          .neq('status', 'Rejected')
+          .neq('status', 'Overdue');
+      } catch (err) {
+        console.warn('Auto overdue check error:', err);
+      }
+
       let query = supabaseAdmin
         .from('borrowing_transactions')
         .select(`
@@ -371,6 +386,22 @@ export const hybridTransactionRepo = {
 
   async getByTicketId(ticketId: string): Promise<BorrowingTransaction | undefined> {
     if (isSupabaseConfigured() && supabaseAdmin) {
+      // Auto-update ticket if overdue
+      const nowIso = new Date().toISOString();
+      try {
+        await supabaseAdmin
+          .from('borrowing_transactions')
+          .update({ status: 'Overdue' })
+          .eq('ticket_id', ticketId)
+          .not('expected_return_date', 'is', null)
+          .lt('expected_return_date', nowIso)
+          .neq('status', 'Returned')
+          .neq('status', 'Rejected')
+          .neq('status', 'Overdue');
+      } catch (err) {
+        console.warn('Auto overdue check single error:', err);
+      }
+
       const { data, error } = await supabaseAdmin
         .from('borrowing_transactions')
         .select(`

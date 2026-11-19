@@ -47,12 +47,24 @@ export async function GET() {
 
       // 4. Overdue Transactions from Supabase
       const nowIso = new Date().toISOString();
+      try {
+        await supabaseAdmin
+          .from('borrowing_transactions')
+          .update({ status: 'Overdue' })
+          .not('expected_return_date', 'is', null)
+          .lt('expected_return_date', nowIso)
+          .neq('status', 'Returned')
+          .neq('status', 'Rejected')
+          .neq('status', 'Overdue');
+      } catch {}
+
       const { data: overdueTx } = await supabaseAdmin
         .from('borrowing_transactions')
         .select('*, users(name, email)')
-        .eq('status', 'Picked_Up')
         .not('expected_return_date', 'is', null)
-        .lt('expected_return_date', nowIso);
+        .lt('expected_return_date', nowIso)
+        .neq('status', 'Returned')
+        .neq('status', 'Rejected');
 
       const overdueTransactions = (overdueTx || []).map((t: any) => ({
         ...t,
@@ -122,7 +134,7 @@ export async function GET() {
       SELECT t.*, u.name as user_name, u.email as user_email
       FROM Borrowing_Transactions t
       LEFT JOIN Users u ON t.user_id = u.user_id
-      WHERE t.status = 'Picked_Up' 
+      WHERE t.status NOT IN ('Returned', 'Rejected') 
         AND t.expected_return_date IS NOT NULL 
         AND t.expected_return_date < ?
       ORDER BY t.expected_return_date ASC

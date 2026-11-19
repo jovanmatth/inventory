@@ -635,11 +635,10 @@ function UserDashboardContent() {
                         >
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                                item.status === 'Borrowed' || item.qty <= 0
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}>
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${item.status === 'Borrowed' || item.qty <= 0
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                                }`}>
                                 {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
                               </span>
                               <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
@@ -909,11 +908,10 @@ function UserDashboardContent() {
                         >
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                                item.status === 'Borrowed' || item.qty <= 0
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}>
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${item.status === 'Borrowed' || item.qty <= 0
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                                }`}>
                                 {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
                               </span>
                               <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
@@ -1254,50 +1252,79 @@ function UserDashboardContent() {
 
               return (
                 <div className="space-y-3">
-                  {displayedTxs.map((tx) => (
-                    <div
-                      key={tx.ticket_id}
-                      className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-slate-900 text-base">{tx.ticket_id}</span>
-                          {tx.is_return_pending ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-700" />
-                              Menunggu Approval Pengembalian
-                            </span>
-                          ) : (
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${tx.status === 'Approved' || tx.status === 'Ready_for_Pickup'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : tx.status === 'Picked_Up'
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                  : tx.status === 'Pending_Approval' || tx.status === 'In_Queue'
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : tx.status === 'Returned'
-                                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                      : 'bg-red-100 text-red-800 border border-red-300'
-                                }`}
-                            >
-                              {tx.status}
-                            </span>
-                          )}
-                        </div>
+                  {displayedTxs.map((tx) => {
+                    const isOverdue =
+                      tx.status === 'Overdue' ||
+                      (!!tx.expected_return_date &&
+                        new Date(tx.expected_return_date!).getTime() < Date.now() &&
+                        tx.status !== 'Returned' &&
+                        tx.status !== 'Rejected');
 
-                        <p className="text-xs text-slate-700">
-                          <span className="font-semibold">Tujuan:</span> {tx.purpose}
-                        </p>
+                    return (
+                      <div
+                        key={tx.ticket_id}
+                        className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${
+                          isOverdue && tx.status !== 'Returned'
+                            ? 'bg-red-50/40 border-red-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-slate-900 text-base">{tx.ticket_id}</span>
+                            {tx.transaction_type === 'Reservation' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-300">
+                                Reservasi Terjadwal
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                Peminjaman Langsung
+                              </span>
+                            )}
+                            {tx.is_return_pending ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-700" />
+                                Menunggu Approval Pengembalian
+                              </span>
+                            ) : isOverdue && tx.status !== 'Returned' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-red-600" />
+                                Overdue (Terlambat)
+                              </span>
+                            ) : (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${tx.status === 'Approved' || tx.status === 'Ready_for_Pickup'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : tx.status === 'Picked_Up'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                    : tx.status === 'Pending_Approval' || tx.status === 'In_Queue'
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                      : tx.status === 'Returned'
+                                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                        : 'bg-red-100 text-red-800 border border-red-300'
+                                  }`}
+                              >
+                                {tx.status}
+                              </span>
+                            )}
+                          </div>
 
-                        <div className="text-[11px] text-slate-500 flex flex-wrap gap-4 pt-1">
-                          <span>Waktu: {new Date(tx.borrow_date).toLocaleDateString('id-ID')}</span>
-                          <span>Durasi: {tx.duration}</span>
-                          {tx.expected_return_date && (
-                            <span className="text-red-600 font-semibold">
-                              Batas Kembali: {formatDueDateTime(tx.expected_return_date)}
+                          <p className="text-xs text-slate-700">
+                            <span className="font-semibold">Tujuan:</span> {tx.purpose}
+                          </p>
+
+                          <div className="text-[11px] text-slate-500 flex flex-wrap gap-4 pt-1">
+                            <span>
+                              {tx.transaction_type === 'Reservation' ? 'Rencana Ambil' : 'Waktu Pinjam'}:{' '}
+                              <strong className="text-slate-700 font-semibold">{new Date(tx.borrow_date).toLocaleString('id-ID')}</strong>
                             </span>
-                          )}
-                        </div>
+                            <span>Durasi: {tx.duration}</span>
+                            {tx.expected_return_date && (
+                              <span className={`font-semibold ${isOverdue && tx.status !== 'Returned' ? 'text-red-700 font-bold' : 'text-red-600'}`}>
+                                Batas Kembali: {formatDueDateTime(tx.expected_return_date)} {isOverdue && tx.status !== 'Returned' ? '(Lewat Batas Waktu)' : ''}
+                              </span>
+                            )}
+                          </div>
 
                         {/* Return Rejection Warning Note */}
                         {tx.return_rejection_note && (
@@ -1377,7 +1404,8 @@ function UserDashboardContent() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               );
             })()}
@@ -1957,20 +1985,60 @@ function UserDashboardContent() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${selectedTicket.status === 'Returned'
-              ? 'bg-emerald-100 text-emerald-800'
-              : 'bg-pigeon-100 text-pigeon-800'
-              }`}>
-              {selectedTicket.status === 'Returned' ? 'Riwayat Pengembalian Tiket' : 'Tiket Pengambilan Barang'}
-            </div>
-            <h3 className="text-3xl font-black font-mono text-slate-900 tracking-tight">{selectedTicket.ticket_id}</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Status:{' '}
-              <span className={`font-bold ${selectedTicket.status === 'Returned' ? 'text-emerald-700' : 'text-pigeon-700'
-                }`}>
-                {selectedTicket.status === 'Returned' ? 'Returned (Selesai & Ditutup)' : selectedTicket.status}
-              </span>
-            </p>
+            {(() => {
+              const isTicketOverdue =
+                selectedTicket.status === 'Overdue' ||
+                (!!selectedTicket.expected_return_date &&
+                  new Date(selectedTicket.expected_return_date!).getTime() < Date.now() &&
+                  selectedTicket.status !== 'Returned' &&
+                  selectedTicket.status !== 'Rejected');
+
+              return (
+                <>
+                  <div
+                    className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${
+                      selectedTicket.status === 'Returned'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : isTicketOverdue
+                          ? 'bg-red-100 text-red-800 border border-red-300'
+                          : 'bg-pigeon-100 text-pigeon-800'
+                    }`}
+                  >
+                    {selectedTicket.status === 'Returned'
+                      ? 'Riwayat Pengembalian Tiket'
+                      : isTicketOverdue
+                        ? 'Tiket Terlambat (Overdue)'
+                        : 'Tiket Pengambilan Barang'}
+                  </div>
+                  <h3 className="text-3xl font-black font-mono text-slate-900 tracking-tight">{selectedTicket.ticket_id}</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Status:{' '}
+                    <span
+                      className={`font-bold ${
+                        selectedTicket.status === 'Returned'
+                          ? 'text-emerald-700'
+                          : isTicketOverdue
+                            ? 'text-red-600'
+                            : 'text-pigeon-700'
+                      }`}
+                    >
+                      {selectedTicket.status === 'Returned'
+                        ? 'Returned (Selesai & Ditutup)'
+                        : isTicketOverdue
+                          ? 'Overdue (Melewati Batas Pengembalian)'
+                          : selectedTicket.status}
+                    </span>
+                  </p>
+
+                  {isTicketOverdue && selectedTicket.status !== 'Returned' && (
+                    <div className="mt-2.5 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-1.5 text-left">
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                      <span>Batas waktu pengembalian telah lewat! Harap segera kembalikan barang ke staf lab.</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="my-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-2 max-h-[50vh] overflow-y-auto">
               <p><span className="text-slate-500">Peminjam:</span> <span className="font-bold text-slate-800">{selectedTicket.user_name}</span></p>

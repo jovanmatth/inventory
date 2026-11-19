@@ -397,6 +397,16 @@ export const transactionRepo = {
   getAll(filter?: { status?: string; user_id?: string }): BorrowingTransaction[] {
     if (!db) return [];
     try {
+      try {
+        db.prepare(`
+          UPDATE Borrowing_Transactions
+          SET status = 'Overdue'
+          WHERE expected_return_date IS NOT NULL
+            AND expected_return_date < ?
+            AND status NOT IN ('Returned', 'Rejected', 'Overdue')
+        `).run(new Date().toISOString());
+      } catch {}
+
       let sql = `
         SELECT t.*, u.name as user_name, u.email as user_email
         FROM Borrowing_Transactions t
@@ -432,6 +442,17 @@ export const transactionRepo = {
   getByTicketId(ticketId: string): BorrowingTransaction | undefined {
     if (!db) return undefined;
     try {
+      try {
+        db.prepare(`
+          UPDATE Borrowing_Transactions
+          SET status = 'Overdue'
+          WHERE ticket_id = ?
+            AND expected_return_date IS NOT NULL
+            AND expected_return_date < ?
+            AND status NOT IN ('Returned', 'Rejected', 'Overdue')
+        `).run(ticketId, new Date().toISOString());
+      } catch {}
+
       const row = db.prepare(`
         SELECT t.*, u.name as user_name, u.email as user_email
         FROM Borrowing_Transactions t

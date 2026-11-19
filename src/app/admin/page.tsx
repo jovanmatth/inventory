@@ -101,7 +101,7 @@ function AdminDashboardContent() {
         const u = JSON.parse(saved);
         if (u?.user_id) performerId = u.user_id;
       }
-    } catch {}
+    } catch { }
 
     try {
       const res = await fetch(`/api/transactions/${verifyReturnModalTx.ticket_id}/return`, {
@@ -441,7 +441,7 @@ function AdminDashboardContent() {
         const u = JSON.parse(saved);
         if (u?.user_id) performerId = u.user_id;
       }
-    } catch {}
+    } catch { }
 
     try {
       const res = await fetch(`/api/transactions/${selectedReturnTx.ticket_id}/return`, {
@@ -488,25 +488,24 @@ function AdminDashboardContent() {
   });
 
   const pendingRequests = transactions.filter((t) => t.status === 'Pending_Approval' || t.status === 'In_Queue');
-  const activeLoans = transactions.filter((t) => t.status === 'Picked_Up' || t.status === 'Approved' || t.status === 'Ready_for_Pickup');
+  const activeLoans = transactions.filter((t) => t.status === 'Picked_Up' || t.status === 'Approved' || t.status === 'Ready_for_Pickup' || t.status === 'Overdue');
 
   return (
     <AppShell activeMenu={
       activeTab === 'users' ? 'Kelola Pengguna & Whitelist' :
-      activeTab === 'inventory' ? 'Manajemen Inventaris & Transfer' :
-      activeTab === 'approvals' ? 'Persetujuan Peminjaman' :
-      activeTab === 'returns' ? 'Pemeriksaan Kembali & Sanksi' :
-      activeTab === 'monitoring' ? 'Sistem Pemantauan (Monitoring)' :
-      'Overview Dashboard'
+        activeTab === 'inventory' ? 'Manajemen Inventaris & Transfer' :
+          activeTab === 'approvals' ? 'Persetujuan Peminjaman' :
+            activeTab === 'returns' ? 'Pemeriksaan Kembali & Sanksi' :
+              activeTab === 'monitoring' ? 'Sistem Pemantauan (Monitoring)' :
+                'Overview Dashboard'
     }>
       {/* Toast Alert */}
       {alertMsg && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium animate-in fade-in slide-in-from-top-4 flex items-center gap-2 ${
-            alertMsg.type === 'success'
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-              : 'bg-red-50 border-red-300 text-red-900'
-          }`}
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium animate-in fade-in slide-in-from-top-4 flex items-center gap-2 ${alertMsg.type === 'success'
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+            : 'bg-red-50 border-red-300 text-red-900'
+            }`}
         >
           {alertMsg.type === 'success' ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertOctagon className="w-4 h-4 text-red-600" />}
           <span>{alertMsg.text}</span>
@@ -555,23 +554,21 @@ function AdminDashboardContent() {
                 setActiveTab(tab.id);
                 window.history.pushState(null, '', tab.id === 'overview' ? '/admin?tab=overview' : `?tab=${tab.id}`);
               }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
-              }`}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${isActive
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                }`}
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : tab.highlight
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive
+                    ? 'bg-white/20 text-white'
+                    : tab.highlight
                       ? 'bg-amber-100 text-amber-800'
                       : 'bg-slate-100 text-slate-600'
-                  }`}
+                    }`}
                 >
                   {tab.count}
                 </span>
@@ -789,13 +786,12 @@ function AdminDashboardContent() {
                     <td className="p-3 font-mono text-slate-600">{u.email}</td>
                     <td className="p-3">
                       <span
-                        className={`px-2 py-0.5 rounded font-medium text-[10px] uppercase ${
-                          u.role === 'Admin'
-                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                            : u.role === 'Supervisor'
+                        className={`px-2 py-0.5 rounded font-medium text-[10px] uppercase ${u.role === 'Admin'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : u.role === 'Supervisor'
                             ? 'bg-blue-100 text-blue-800 border border-blue-300'
                             : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        }`}
+                          }`}
                       >
                         {u.role}
                       </span>
@@ -919,9 +915,8 @@ function AdminDashboardContent() {
                     <td className="p-3">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`font-bold ${
-                            item.qty <= item.min_qty_alert ? 'text-red-600' : 'text-slate-800'
-                          }`}
+                          className={`font-bold ${item.qty <= item.min_qty_alert ? 'text-red-600' : 'text-slate-800'
+                            }`}
                         >
                           {item.qty}
                         </span>
@@ -968,11 +963,10 @@ function AdminDashboardContent() {
                     </td>
                     <td className="p-3">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          item.condition === 'Good'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${item.condition === 'Good'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-red-100 text-red-800'
+                          }`}
                       >
                         {item.condition}
                       </span>
@@ -1454,12 +1448,14 @@ function AdminDashboardContent() {
                       <td className="p-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            tx.status === 'Picked_Up'
+                            tx.status === 'Overdue'
+                              ? 'bg-red-100 text-red-800 border border-red-200'
+                              : tx.status === 'Picked_Up'
                               ? 'bg-blue-100 text-blue-800'
                               : tx.status === 'Ready_for_Pickup'
                               ? 'bg-purple-100 text-purple-800'
                               : 'bg-emerald-100 text-emerald-800'
-                          }`}
+                            }`}
                         >
                           {tx.status}
                         </span>
@@ -1588,17 +1584,16 @@ function AdminDashboardContent() {
                       </td>
                       <td className="p-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            log.action_type === 'Transferred'
-                              ? 'bg-purple-100 text-purple-800'
-                              : log.action_type === 'Stock_In'
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${log.action_type === 'Transferred'
+                            ? 'bg-purple-100 text-purple-800'
+                            : log.action_type === 'Stock_In'
                               ? 'bg-emerald-100 text-emerald-800'
                               : log.action_type === 'Stock_Out'
-                              ? 'bg-blue-100 text-blue-800'
-                              : log.action_type === 'Damaged'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-slate-100 text-slate-800'
-                          }`}
+                                ? 'bg-blue-100 text-blue-800'
+                                : log.action_type === 'Damaged'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-slate-100 text-slate-800'
+                            }`}
                         >
                           {log.action_type}
                         </span>
