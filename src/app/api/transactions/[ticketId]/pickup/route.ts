@@ -34,9 +34,11 @@ export async function POST(
       for (const it of tx.items) {
         const currentItem = await inventoryRepo.getById(it.item_id);
         if (currentItem) {
+          const newQty = Math.max(0, currentItem.qty - it.qty_borrowed);
           await inventoryRepo.update({
             ...currentItem,
-            qty: Math.max(0, currentItem.qty - it.qty_borrowed),
+            qty: newQty,
+            status: newQty === 0 ? 'Borrowed' : currentItem.status,
           });
         }
 

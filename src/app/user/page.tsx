@@ -480,8 +480,12 @@ function UserDashboardContent() {
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-semibold">
-                            {item.borrowing_type}
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                            item.status === 'Borrowed' || item.qty <= 0
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
                           </span>
                           <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
                         </div>
@@ -543,7 +547,7 @@ function UserDashboardContent() {
                         >
                           <div>
                             <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
-                            <span className="text-[10px] text-slate-500">{c.item.borrowing_type}</span>
+                            <span className="text-[10px] text-emerald-700 font-semibold">{c.item.qty > 0 ? 'Tersedia' : 'Dipinjam'}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-800">{c.qty} unit</span>
@@ -668,7 +672,7 @@ function UserDashboardContent() {
                     <th className="p-3">Brand</th>
                     <th className="p-3">Lokasi Lab & Detail</th>
                     <th className="p-3">Stok Tersedia</th>
-                    <th className="p-3">Tipe Peminjaman</th>
+                    <th className="p-3">Status Barang</th>
                     <th className="p-3">Kondisi</th>
                   </tr>
                 </thead>
@@ -683,7 +687,15 @@ function UserDashboardContent() {
                       </td>
                       <td className="p-3 font-bold">{it.qty} unit</td>
                       <td className="p-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100">{it.borrowing_type}</span>
+                        {it.status === 'Borrowed' || it.qty <= 0 ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                            Dipinjam
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Tersedia
+                          </span>
+                        )}
                       </td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${it.condition === 'Good' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>

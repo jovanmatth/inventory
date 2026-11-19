@@ -896,7 +896,7 @@ function AdminDashboardContent() {
                   <th className="p-3">Brand / Model</th>
                   <th className="p-3">Lokasi Lab & Rak</th>
                   <th className="p-3">Stok Saat Ini</th>
-                  <th className="p-3">Tipe Peminjaman</th>
+                  <th className="p-3">Status Barang</th>
                   <th className="p-3">Kondisi</th>
                   <th className="p-3 text-right">Aksi</th>
                 </tr>
@@ -933,17 +933,38 @@ function AdminDashboardContent() {
                       </div>
                     </td>
                     <td className="p-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          item.borrowing_type === 'Loan'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : item.borrowing_type === 'Habis Pakai'
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : 'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}
-                      >
-                        {item.borrowing_type}
-                      </span>
+                      {(() => {
+                        const isBorrowed = item.status === 'Borrowed' || item.qty <= 0;
+                        const isDamaged = item.status === 'Damaged' || item.condition === 'Damaged';
+                        const isMaintenance = item.status === 'Maintenance';
+
+                        if (isDamaged) {
+                          return (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-800 border border-red-200">
+                              Rusak
+                            </span>
+                          );
+                        }
+                        if (isMaintenance) {
+                          return (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              Maintenance
+                            </span>
+                          );
+                        }
+                        if (isBorrowed) {
+                          return (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                              Dipinjam
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Tersedia
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="p-3">
                       <span
@@ -1064,7 +1085,7 @@ function AdminDashboardContent() {
                             className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
                           >
                             <span>{it.item_name}</span>
-                            <span className="text-slate-400 font-normal"> ({it.qty_borrowed} unit • {it.borrowing_type})</span>
+                            <span className="text-slate-400 font-normal"> ({it.qty_borrowed} unit)</span>
                           </div>
                         ))}
                       </div>
@@ -1309,7 +1330,7 @@ function AdminDashboardContent() {
                   <div className="flex flex-wrap gap-2">
                     {selectedReturnTx.items?.map((it) => (
                       <span key={it.id} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800">
-                        {it.item_name} ({it.qty_borrowed} unit • {it.borrowing_type})
+                        {it.item_name} ({it.qty_borrowed} unit)
                       </span>
                     ))}
                   </div>
@@ -1802,16 +1823,18 @@ function AdminDashboardContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tipe Peminjaman:</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status Barang:</label>
                   <select
-                    name="borrowing_type"
-                    defaultValue={editingItem?.borrowing_type || 'Loan'}
+                    name="status"
+                    defaultValue={editingItem?.status || 'Available'}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500"
                   >
-                    <option value="Loan">Loan (Pinjam)</option>
-                    <option value="Habis Pakai">Habis Pakai</option>
-                    <option value="Used">Used</option>
+                    <option value="Available">Tersedia</option>
+                    <option value="Borrowed">Dipinjam</option>
+                    <option value="Damaged">Rusak</option>
+                    <option value="Maintenance">Maintenance</option>
                   </select>
+                  <input type="hidden" name="borrowing_type" value={editingItem?.borrowing_type || 'Loan'} />
                 </div>
               </div>
 
@@ -1876,17 +1899,13 @@ function AdminDashboardContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status Ketersediaan:</label>
-                  <select
-                    name="status"
-                    defaultValue={editingItem?.status || 'Available'}
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Masuk Inventaris:</label>
+                  <input
+                    type="date"
+                    name="date_added"
+                    defaultValue={editingItem?.date_added || new Date().toISOString().split('T')[0]}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-pigeon-500"
-                  >
-                    <option value="Available">Available (Tersedia)</option>
-                    <option value="Borrowed">Borrowed (Dipinjam)</option>
-                    <option value="Damaged">Damaged (Rusak)</option>
-                    <option value="Maintenance">Maintenance (Servis)</option>
-                  </select>
+                  />
                 </div>
               </div>
 

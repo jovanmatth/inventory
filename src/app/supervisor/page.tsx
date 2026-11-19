@@ -557,7 +557,7 @@ function SupervisorDashboardContent() {
                   <th className="p-3">Brand</th>
                   <th className="p-3">Lokasi</th>
                   <th className="p-3">Stok</th>
-                  <th className="p-3">Tipe</th>
+                  <th className="p-3">Status Barang</th>
                   <th className="p-3">Kondisi</th>
                   <th className="p-3 text-right">Aksi</th>
                 </tr>
@@ -573,7 +573,15 @@ function SupervisorDashboardContent() {
                     </td>
                     <td className="p-3 font-bold">{item.qty} unit</td>
                     <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100">{item.borrowing_type}</span>
+                      {item.status === 'Borrowed' || item.qty <= 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          Dipinjam
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Tersedia
+                        </span>
+                      )}
                     </td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${item.condition === 'Good' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
@@ -606,8 +614,8 @@ function SupervisorDashboardContent() {
               {inventory.filter((i) => i.qty > 0).map((it) => (
                 <div key={it.item_id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
                   <div>
-                    <span className="text-[10px] px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-semibold">
-                      {it.borrowing_type}
+                    <span className="text-[10px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-semibold">
+                      Tersedia
                     </span>
                     <p className="font-bold text-slate-900 text-xs mt-1">{it.item_name}</p>
                     <p className="text-[11px] text-slate-500">{it.brand} • {it.location}</p>
@@ -647,7 +655,7 @@ function SupervisorDashboardContent() {
                     <div key={c.item.item_id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
                       <div>
                         <p className="font-bold text-slate-900">{c.item.item_name}</p>
-                        <p className="text-[10px] text-slate-400">{c.item.location} • {c.item.borrowing_type}</p>
+                        <p className="text-[10px] text-slate-400">{c.item.location} • <span className="text-emerald-700 font-semibold">Tersedia</span></p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-800">{c.qty} unit</span>
@@ -1012,7 +1020,7 @@ function SupervisorDashboardContent() {
                   <div className="flex flex-wrap gap-1.5">
                     {selectedReturnTx.items?.map((it) => (
                       <span key={it.id} className="p-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800">
-                        {it.item_name} ({it.qty_borrowed} unit • {it.borrowing_type})
+                        {it.item_name} ({it.qty_borrowed} unit)
                       </span>
                     ))}
                   </div>

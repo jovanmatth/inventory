@@ -151,6 +151,7 @@ export async function POST(
               await inventoryRepo.update({
                 ...currentItem,
                 qty: currentItem.qty + it.qty_borrowed,
+                status: 'Available',
               });
             }
 
