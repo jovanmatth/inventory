@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ShoppingBag,
   Plus,
+  Minus,
   Clock,
   Search,
   Filter,
@@ -93,7 +94,7 @@ function SupervisorDashboardContent() {
         const u = JSON.parse(saved);
         if (u?.user_id) performerId = u.user_id;
       }
-    } catch {}
+    } catch { }
 
     try {
       const res = await fetch(`/api/transactions/${verifyReturnModalTx.ticket_id}/return`, {
@@ -228,6 +229,26 @@ function SupervisorDashboardContent() {
     setCart(cart.filter((c) => c.item.item_id !== itemId));
   };
 
+  const handleUpdateCartQty = (itemId: string, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveFromCart(itemId);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.item.item_id === itemId) {
+          const max = c.item.qty;
+          if (newQty > max) {
+            showNotification(`Jumlah maksimal tersedia untuk "${c.item.item_name}" adalah ${max} unit`, 'error');
+            return { ...c, qty: max };
+          }
+          return { ...c, qty: newQty };
+        }
+        return c;
+      })
+    );
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cart.length) {
@@ -331,7 +352,7 @@ function SupervisorDashboardContent() {
         const u = JSON.parse(saved);
         if (u?.user_id) performerId = u.user_id;
       }
-    } catch {}
+    } catch { }
 
     try {
       const res = await fetch(`/api/transactions/${selectedReturnTx.ticket_id}/return`, {
@@ -374,20 +395,19 @@ function SupervisorDashboardContent() {
   return (
     <AppShell activeMenu={
       activeTab === 'inventory' ? 'Katalog Barang (View Only)' :
-      activeTab === 'borrow' ? 'Pinjam & Reservasi Barang' :
-      activeTab === 'approvals' ? 'Persetujuan Request' :
-      activeTab === 'returns' ? 'Pemeriksaan Kembali & Sanksi' :
-      activeTab === 'monitoring' ? 'Pemantauan Stok & Overdue' :
-      'Supervisor Dashboard'
+        activeTab === 'borrow' ? 'Pinjam & Reservasi Barang' :
+          activeTab === 'approvals' ? 'Persetujuan Request' :
+            activeTab === 'returns' ? 'Pemeriksaan Kembali & Sanksi' :
+              activeTab === 'monitoring' ? 'Pemantauan Stok & Overdue' :
+                'Supervisor Dashboard'
     }>
       {/* Toast Alert */}
       {alertMsg && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium animate-in fade-in flex items-center gap-2 ${
-            alertMsg.type === 'success'
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-              : 'bg-red-50 border-red-300 text-red-900'
-          }`}
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium animate-in fade-in flex items-center gap-2 ${alertMsg.type === 'success'
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+            : 'bg-red-50 border-red-300 text-red-900'
+            }`}
         >
           {alertMsg.type === 'success' ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertOctagon className="w-4 h-4 text-red-600" />}
           <span>{alertMsg.text}</span>
@@ -436,23 +456,21 @@ function SupervisorDashboardContent() {
                 setActiveTab(tab.id);
                 window.history.pushState(null, '', tab.id === 'overview' ? '/supervisor?tab=overview' : `?tab=${tab.id}`);
               }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
-              }`}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${isActive
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                }`}
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : tab.highlight
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive
+                    ? 'bg-white/20 text-white'
+                    : tab.highlight
                       ? 'bg-amber-100 text-amber-800'
                       : 'bg-slate-100 text-slate-600'
-                  }`}
+                    }`}
                 >
                   {tab.count}
                 </span>
@@ -652,17 +670,56 @@ function SupervisorDashboardContent() {
               <form onSubmit={handleCheckout} className="space-y-3">
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {cart.map((c) => (
-                    <div key={c.item.item_id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                      <div>
-                        <p className="font-bold text-slate-900">{c.item.item_name}</p>
-                        <p className="text-[10px] text-slate-400">{c.item.location} • <span className="text-emerald-700 font-semibold">Tersedia</span></p>
+                    <div key={c.item.item_id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 truncate" title={c.item.item_name}>{c.item.item_name}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {c.item.location} • Tersedia: <strong className="text-slate-700">{c.item.qty}</strong>
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-800">{c.qty} unit</span>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Stepper with Minus, Input, and Plus */}
+                        <div className="flex items-center border border-slate-300 bg-white rounded-lg p-0.5 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateCartQty(c.item.item_id, c.qty - 1)}
+                            disabled={c.qty <= 1}
+                            className="w-6 h-6 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                            title="Kurangi 1 unit"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+
+                          <input
+                            type="number"
+                            min={1}
+                            max={c.item.qty}
+                            value={c.qty}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) handleUpdateCartQty(c.item.item_id, val);
+                            }}
+                            className="w-9 text-center font-bold text-slate-800 text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            title="Ketik jumlah unit"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateCartQty(c.item.item_id, c.qty + 1)}
+                            disabled={c.qty >= c.item.qty}
+                            className="w-6 h-6 flex items-center justify-center text-pigeon-700 hover:bg-pigeon-50 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                            title={c.qty >= c.item.qty ? 'Stok maksimal tercapai' : 'Tambah 1 unit (Add)'}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => handleRemoveFromCart(c.item.item_id)}
-                          className="text-red-500 hover:text-red-700"
+                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                          title="Hapus dari keranjang"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

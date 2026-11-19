@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   Trash2,
   Plus,
+  Minus,
   AlertOctagon,
   HelpCircle,
   Sparkles,
@@ -286,6 +287,26 @@ function UserDashboardContent() {
     setCart(cart.filter((c) => c.item.item_id !== itemId));
   };
 
+  const handleUpdateCartQty = (itemId: string, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveFromCart(itemId);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.item.item_id === itemId) {
+          const max = c.item.qty;
+          if (newQty > max) {
+            showNotification(`Jumlah maksimal tersedia untuk "${c.item.item_name}" adalah ${max} unit`, 'error');
+            return { ...c, qty: max };
+          }
+          return { ...c, qty: newQty };
+        }
+        return c;
+      })
+    );
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cart.length) {
@@ -356,6 +377,26 @@ function UserDashboardContent() {
 
   const handleRemoveFromReserveCart = (itemId: string) => {
     setReserveCart(reserveCart.filter((c) => c.item.item_id !== itemId));
+  };
+
+  const handleUpdateReserveCartQty = (itemId: string, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveFromReserveCart(itemId);
+      return;
+    }
+    setReserveCart((prev) =>
+      prev.map((c) => {
+        if (c.item.item_id === itemId) {
+          const max = c.item.qty;
+          if (newQty > max) {
+            showNotification(`Jumlah maksimal tersedia untuk "${c.item.item_name}" adalah ${max} unit`, 'error');
+            return { ...c, qty: max };
+          }
+          return { ...c, qty: newQty };
+        }
+        return c;
+      })
+    );
   };
 
   const handleReserveCheckout = async (e: React.FormEvent) => {
@@ -585,45 +626,55 @@ function UserDashboardContent() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
-                    {filteredItems.map((item) => (
-                      <div
-                        key={item.item_id}
-                        className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                              item.status === 'Borrowed' || item.qty <= 0
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}>
-                              {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                    {filteredItems.map((item) => {
+                      const inCart = cart.find((c) => c.item.item_id === item.item_id);
+                      return (
+                        <div
+                          key={item.item_id}
+                          className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                                item.status === 'Borrowed' || item.qty <= 0
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                            </div>
+                            <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
+                            <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
                           </div>
-                          <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
-                          <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
-                        </div>
 
-                        <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800">
-                            {item.qty > 0 ? (
-                              <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
-                            ) : (
-                              <span className="text-red-500">Stok habis</span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => handleAddToCart(item)}
-                            disabled={item.qty <= 0}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
-                          >
-                            + Pinjam
-                          </button>
+                          <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-800">
+                                {item.qty > 0 ? (
+                                  <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
+                                ) : (
+                                  <span className="text-red-500">Stok habis</span>
+                                )}
+                              </span>
+                              {inCart && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                  {inCart.qty} dipilih
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleAddToCart(item)}
+                              disabled={item.qty <= 0 || (inCart && inCart.qty >= item.qty)}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
+                            >
+                              + Pinjam
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -651,22 +702,63 @@ function UserDashboardContent() {
                     </div>
                   ) : (
                     <form onSubmit={handleCheckout} className="space-y-3">
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {cart.map((c) => (
                           <div
                             key={c.item.item_id}
-                            className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
+                            className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2 text-xs"
                           >
-                            <div>
-                              <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
-                              <span className="text-[10px] text-emerald-700 font-semibold">{c.item.location}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-slate-900 truncate" title={c.item.item_name}>{c.item.item_name}</p>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="text-emerald-700 font-semibold">{c.item.location}</span>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-slate-500">Tersedia: <strong>{c.item.qty}</strong></span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800">{c.qty} unit</span>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Quantity Stepper with Minus, Input, and Add (+) */}
+                              <div className="flex items-center border border-slate-300 bg-white rounded-lg p-0.5 shadow-sm">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCartQty(c.item.item_id, c.qty - 1)}
+                                  disabled={c.qty <= 1}
+                                  className="w-6 h-6 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                                  title="Kurangi 1 unit"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={c.item.qty}
+                                  value={c.qty}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val)) handleUpdateCartQty(c.item.item_id, val);
+                                  }}
+                                  className="w-9 text-center font-bold text-slate-800 text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Ketik jumlah unit"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCartQty(c.item.item_id, c.qty + 1)}
+                                  disabled={c.qty >= c.item.qty}
+                                  className="w-6 h-6 flex items-center justify-center text-emerald-700 hover:bg-emerald-50 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                                  title={c.qty >= c.item.qty ? 'Stok maksimal tercapai' : 'Tambah 1 unit (Add)'}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => handleRemoveFromCart(c.item.item_id)}
-                                className="text-red-500 hover:text-red-700 cursor-pointer"
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                                title="Hapus dari keranjang"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -808,45 +900,55 @@ function UserDashboardContent() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
-                    {filteredItems.map((item) => (
-                      <div
-                        key={item.item_id}
-                        className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                              item.status === 'Borrowed' || item.qty <= 0
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}>
-                              {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                    {filteredItems.map((item) => {
+                      const inReserve = reserveCart.find((c) => c.item.item_id === item.item_id);
+                      return (
+                        <div
+                          key={item.item_id}
+                          className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                                item.status === 'Borrowed' || item.qty <= 0
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {item.status === 'Borrowed' || item.qty <= 0 ? 'Dipinjam' : 'Tersedia'}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium">{item.location}</span>
+                            </div>
+                            <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
+                            <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
                           </div>
-                          <h4 className="font-bold text-slate-900 text-xs">{item.item_name}</h4>
-                          <p className="text-[11px] text-slate-500">{item.brand} • {item.variant}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">{item.location_detail}</p>
-                        </div>
 
-                        <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800">
-                            {item.qty > 0 ? (
-                              <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
-                            ) : (
-                              <span className="text-red-500">Stok habis</span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => handleAddToReserveCart(item)}
-                            disabled={item.qty <= 0}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
-                          >
-                            + Pilih Reservasi
-                          </button>
+                          <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-800">
+                                {item.qty > 0 ? (
+                                  <span className="text-emerald-700 font-semibold">{item.qty} tersedia</span>
+                                ) : (
+                                  <span className="text-red-500">Stok habis</span>
+                                )}
+                              </span>
+                              {inReserve && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">
+                                  {inReserve.qty} dipilih
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleAddToReserveCart(item)}
+                              disabled={item.qty <= 0 || (inReserve && inReserve.qty >= item.qty)}
+                              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 cursor-pointer"
+                            >
+                              + Pilih Reservasi
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -874,22 +976,63 @@ function UserDashboardContent() {
                     </div>
                   ) : (
                     <form onSubmit={handleReserveCheckout} className="space-y-3">
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {reserveCart.map((c) => (
                           <div
                             key={c.item.item_id}
-                            className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 flex items-center justify-between text-xs"
+                            className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 flex items-center justify-between gap-2 text-xs"
                           >
-                            <div>
-                              <p className="font-bold text-slate-900 truncate max-w-[170px]">{c.item.item_name}</p>
-                              <span className="text-[10px] text-indigo-700 font-semibold">{c.item.location}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-slate-900 truncate" title={c.item.item_name}>{c.item.item_name}</p>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="text-indigo-700 font-semibold">{c.item.location}</span>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-slate-500">Tersedia: <strong>{c.item.qty}</strong></span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800">{c.qty} unit</span>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Quantity Stepper with Minus, Input, and Add (+) */}
+                              <div className="flex items-center border border-indigo-200 bg-white rounded-lg p-0.5 shadow-sm">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateReserveCartQty(c.item.item_id, c.qty - 1)}
+                                  disabled={c.qty <= 1}
+                                  className="w-6 h-6 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                                  title="Kurangi 1 unit"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={c.item.qty}
+                                  value={c.qty}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val)) handleUpdateReserveCartQty(c.item.item_id, val);
+                                  }}
+                                  className="w-9 text-center font-bold text-slate-800 text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  title="Ketik jumlah unit"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateReserveCartQty(c.item.item_id, c.qty + 1)}
+                                  disabled={c.qty >= c.item.qty}
+                                  className="w-6 h-6 flex items-center justify-center text-indigo-700 hover:bg-indigo-50 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+                                  title={c.qty >= c.item.qty ? 'Stok maksimal tercapai' : 'Tambah 1 unit (Add)'}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => handleRemoveFromReserveCart(c.item.item_id)}
-                                className="text-red-500 hover:text-red-700 cursor-pointer"
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                                title="Hapus dari daftar reservasi"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
