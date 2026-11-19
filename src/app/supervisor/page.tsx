@@ -158,9 +158,20 @@ function SupervisorDashboardContent() {
   const [alertMsg, setAlertMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam) setActiveTab(tabParam);
+    const tabParam = searchParams.get('tab') || 'overview';
+    setActiveTab(tabParam);
   }, [searchParams]);
+
+  useEffect(() => {
+    const handleSetTab = (e: any) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+        window.history.pushState(null, '', e.detail === 'overview' ? '/supervisor?tab=overview' : `?tab=${e.detail}`);
+      }
+    };
+    window.addEventListener('pigeon:set-tab', handleSetTab);
+    return () => window.removeEventListener('pigeon:set-tab', handleSetTab);
+  }, []);
 
   // Load all supervisor data with silent background sync
   const loadSupervisorData = async (isBackground = false) => {
@@ -421,7 +432,10 @@ function SupervisorDashboardContent() {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                window.history.pushState(null, '', tab.id === 'overview' ? '/supervisor?tab=overview' : `?tab=${tab.id}`);
+              }}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 isActive
                   ? 'bg-slate-900 text-white shadow-sm'

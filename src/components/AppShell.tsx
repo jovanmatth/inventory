@@ -92,7 +92,7 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
     // Admin Only
     {
       name: 'Overview Dashboard',
-      href: '/admin',
+      href: '/admin?tab=overview',
       icon: Activity,
       roles: ['Admin'],
     },
@@ -130,7 +130,7 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
     // Supervisor Navigation
     {
       name: 'Supervisor Dashboard',
-      href: '/supervisor',
+      href: '/supervisor?tab=overview',
       icon: Activity,
       roles: ['Supervisor'],
     },
@@ -168,7 +168,7 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
     // User Navigation
     {
       name: 'Peminjaman Saya',
-      href: '/user',
+      href: '/user?tab=borrow',
       icon: Activity,
       roles: ['User'],
     },
@@ -211,6 +211,18 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
   ];
 
   const visibleNav = navItems.filter((item) => item.roles.includes(role));
+
+  const homeHref = role === 'Admin' ? '/admin?tab=overview' : role === 'Supervisor' ? '/supervisor?tab=overview' : '/user?tab=borrow';
+  const homeTab = role === 'User' ? 'borrow' : 'overview';
+
+  const handleNavClick = (itemHref: string) => {
+    try {
+      const url = new URL(itemHref, 'http://localhost');
+      const tab = url.searchParams.get('tab') || homeTab;
+      window.dispatchEvent(new CustomEvent('pigeon:set-tab', { detail: tab }));
+    } catch {}
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -302,9 +314,15 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
 
         {/* Navigation links */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-          <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Menu Utama
-          </div>
+          <Link
+            href={homeHref}
+            onClick={() => handleNavClick(homeHref)}
+            className="flex items-center justify-between px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 uppercase tracking-wider transition-colors cursor-pointer group mb-1"
+            title="Kembali ke Menu Utama / Dashboard Overview"
+          >
+            <span>Menu Utama</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors" />
+          </Link>
           {visibleNav.map((item, idx) => {
             const Icon = item.icon;
             const isSelected = activeMenu ? activeMenu === item.name : pathname === item.href;
@@ -312,7 +330,8 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
               <Link
                 key={idx}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                onClick={() => handleNavClick(item.href)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-pigeon-600 text-white shadow-sm font-semibold'
                     : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -378,16 +397,29 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
 
             {/* Mobile Nav Links */}
             <div className="flex-1 overflow-y-auto space-y-1 py-2">
+              <Link
+                href={homeHref}
+                onClick={() => handleNavClick(homeHref)}
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+              >
+                <span>Menu Utama</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </Link>
               {visibleNav.map((item, idx) => {
                 const Icon = item.icon;
+                const isSelected = activeMenu ? activeMenu === item.name : pathname === item.href;
                 return (
                   <Link
                     key={idx}
                     href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-slate-800"
+                    onClick={() => handleNavClick(item.href)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-pigeon-600 text-white shadow-sm font-semibold'
+                        : 'text-slate-200 hover:bg-slate-800'
+                    }`}
                   >
-                    <Icon className="w-4 h-4 text-pigeon-400" />
+                    <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-pigeon-400'}`} />
                     <span>{item.name}</span>
                   </Link>
                 );
