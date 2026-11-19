@@ -15,9 +15,16 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Tiket tidak ditemukan' }, { status: 404 });
     }
 
+    if (tx.status === 'Picked_Up') {
+      return NextResponse.json(
+        { success: false, message: `Barang untuk tiket ${ticketId} sudah diambil sebelumnya (status sudah Picked_Up).` },
+        { status: 400 }
+      );
+    }
+
     if (tx.status !== 'Approved' && tx.status !== 'Ready_for_Pickup') {
       return NextResponse.json(
-        { success: false, message: `Barang belum dapat diambil. Status saat ini: ${tx.status}` },
+        { success: false, message: `Barang belum dapat diambil atau sudah diproses. Status saat ini: ${tx.status}` },
         { status: 400 }
       );
     }

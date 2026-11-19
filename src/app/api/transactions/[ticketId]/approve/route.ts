@@ -27,6 +27,12 @@ export async function POST(
     }
 
     if (action === 'approve') {
+      if (tx.status === 'Approved' || tx.status === 'Ready_for_Pickup') {
+        return NextResponse.json({ success: false, message: `Tiket ${ticketId} sudah disetujui sebelumnya.` }, { status: 400 });
+      }
+      if (tx.status === 'Picked_Up' || tx.status === 'Returned') {
+        return NextResponse.json({ success: false, message: `Tiket ${ticketId} sudah diproses lebih lanjut (${tx.status}).` }, { status: 400 });
+      }
       // Transition to Approved or Ready_for_Pickup
       const newStatus = tx.transaction_type === 'Reservation' ? 'Ready_for_Pickup' : 'Approved';
       await transactionRepo.updateStatus(ticketId, newStatus, approved_by);

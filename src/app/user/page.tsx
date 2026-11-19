@@ -30,6 +30,7 @@ import {
   ArrowRight,
   Image as ImageIcon,
   X,
+  Loader2,
 } from 'lucide-react';
 import { InventoryItem, BorrowingTransaction, User } from '@/types';
 import { calculateDueDateLocal, formatDueDateTime } from '@/lib/date-utils';
@@ -68,6 +69,7 @@ function UserDashboardContent() {
   const [selectedTicket, setSelectedTicket] = useState<BorrowingTransaction | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<BorrowingTransaction | null>(null);
   const [deletingTicket, setDeletingTicket] = useState(false);
+  const [submittingCheckout, setSubmittingCheckout] = useState(false);
 
   // Return workflow state
   const [returnInputTicketId, setReturnInputTicketId] = useState('');
@@ -257,6 +259,8 @@ function UserDashboardContent() {
       return;
     }
     if (!currentUser) return;
+    if (submittingCheckout) return;
+    setSubmittingCheckout(true);
 
     try {
       const res = await fetch('/api/transactions', {
@@ -289,6 +293,8 @@ function UserDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setSubmittingCheckout(false);
     }
   };
 
@@ -616,9 +622,17 @@ function UserDashboardContent() {
 
                   <button
                     type="submit"
-                    className="w-full mt-2 py-3 bg-pigeon-600 hover:bg-pigeon-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                    disabled={submittingCheckout}
+                    className="w-full mt-2 py-3 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    {activeTab === 'reserve' ? 'Kirim Reservasi Terjadwal' : 'Kirim Permohonan Peminjaman'}
+                    {submittingCheckout && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <span>
+                      {submittingCheckout
+                        ? 'Memproses Permohonan...'
+                        : activeTab === 'reserve'
+                        ? 'Kirim Reservasi Terjadwal'
+                        : 'Kirim Permohonan Peminjaman'}
+                    </span>
                   </button>
                 </form>
               )}

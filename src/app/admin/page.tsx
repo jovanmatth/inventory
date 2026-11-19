@@ -86,6 +86,8 @@ function AdminDashboardContent() {
   const [submittingRejectReturn, setSubmittingRejectReturn] = useState(false);
   const [verifyReturnModalTx, setVerifyReturnModalTx] = useState<BorrowingTransaction | null>(null);
   const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [loadingApproveId, setLoadingApproveId] = useState<string | null>(null);
+  const [loadingPickupId, setLoadingPickupId] = useState<string | null>(null);
   const returnFormRef = React.useRef<HTMLDivElement>(null);
 
   const handleConfirmVerifyReturn = async () => {
@@ -346,6 +348,8 @@ function AdminDashboardContent() {
 
   // Approval actions
   const handleApprove = async (ticketId: string) => {
+    if (loadingApproveId) return;
+    setLoadingApproveId(ticketId);
     try {
       const res = await fetch(`/api/transactions/${ticketId}/approve`, {
         method: 'POST',
@@ -360,6 +364,8 @@ function AdminDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setLoadingApproveId(null);
     }
   };
 
@@ -390,6 +396,8 @@ function AdminDashboardContent() {
 
   // Confirm Pickup
   const handleConfirmPickup = async (ticketId: string) => {
+    if (loadingPickupId) return;
+    setLoadingPickupId(ticketId);
     try {
       const res = await fetch(`/api/transactions/${ticketId}/pickup`, {
         method: 'POST',
@@ -404,6 +412,8 @@ function AdminDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setLoadingPickupId(null);
     }
   };
 
@@ -1050,11 +1060,12 @@ function AdminDashboardContent() {
                   {/* Action buttons */}
                   <div className="flex md:flex-col gap-2 shrink-0">
                     <button
+                      disabled={loadingApproveId === tx.ticket_id}
                       onClick={() => handleApprove(tx.ticket_id)}
-                      className="flex-1 md:flex-none px-4 py-2 bg-pigeon-600 hover:bg-pigeon-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5"
+                      className="flex-1 md:flex-none px-4 py-2 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Setujui (Approve)</span>
+                      {loadingApproveId === tx.ticket_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>{loadingApproveId === tx.ticket_id ? 'Memproses...' : 'Setujui (Approve)'}</span>
                     </button>
 
                     <button
@@ -1421,10 +1432,12 @@ function AdminDashboardContent() {
                       <td className="p-3 text-right space-x-1 whitespace-nowrap">
                         {tx.status !== 'Picked_Up' && (
                           <button
+                            disabled={loadingPickupId === tx.ticket_id}
                             onClick={() => handleConfirmPickup(tx.ticket_id)}
-                            className="px-2.5 py-1 bg-pigeon-600 hover:bg-pigeon-700 text-white rounded-lg text-xs font-semibold"
+                            className="px-2.5 py-1 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            Ambil Barang (Pickup)
+                            {loadingPickupId === tx.ticket_id && <Loader2 className="w-3 h-3 animate-spin" />}
+                            <span>{loadingPickupId === tx.ticket_id ? 'Memproses...' : 'Ambil Barang (Pickup)'}</span>
                           </button>
                         )}
                         <button

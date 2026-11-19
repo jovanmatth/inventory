@@ -78,6 +78,8 @@ function SupervisorDashboardContent() {
   const [submittingRejectReturn, setSubmittingRejectReturn] = useState(false);
   const [verifyReturnModalTx, setVerifyReturnModalTx] = useState<BorrowingTransaction | null>(null);
   const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [loadingApproveId, setLoadingApproveId] = useState<string | null>(null);
+  const [submittingCheckout, setSubmittingCheckout] = useState(false);
   const returnFormRef = React.useRef<HTMLDivElement>(null);
 
   const handleConfirmVerifyReturn = async () => {
@@ -221,6 +223,8 @@ function SupervisorDashboardContent() {
       showNotification('Keranjang barang masih kosong', 'error');
       return;
     }
+    if (submittingCheckout) return;
+    setSubmittingCheckout(true);
 
     try {
       const res = await fetch('/api/transactions', {
@@ -252,10 +256,14 @@ function SupervisorDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setSubmittingCheckout(false);
     }
   };
 
   const handleApprove = async (ticketId: string) => {
+    if (loadingApproveId) return;
+    setLoadingApproveId(ticketId);
     try {
       const res = await fetch(`/api/transactions/${ticketId}/approve`, {
         method: 'POST',
@@ -270,6 +278,8 @@ function SupervisorDashboardContent() {
       broadcastDataChange();
     } catch (err: any) {
       showNotification(err.message, 'error');
+    } finally {
+      setLoadingApproveId(null);
     }
   };
 
@@ -735,9 +745,11 @@ function SupervisorDashboardContent() {
 
                 <button
                   type="submit"
-                  className="w-full mt-2 py-2.5 bg-pigeon-600 hover:bg-pigeon-700 text-white font-bold text-xs rounded-xl shadow-md"
+                  disabled={submittingCheckout}
+                  className="w-full mt-2 py-2.5 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  Ajukan Permohonan (Checkout)
+                  {submittingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  <span>{submittingCheckout ? 'Memproses Checkout...' : 'Ajukan Permohonan (Checkout)'}</span>
                 </button>
               </form>
             )}
@@ -762,10 +774,12 @@ function SupervisorDashboardContent() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      disabled={loadingApproveId === tx.ticket_id}
                       onClick={() => handleApprove(tx.ticket_id)}
-                      className="px-3 py-1.5 bg-pigeon-600 hover:bg-pigeon-700 text-white rounded-lg font-bold"
+                      className="px-3 py-1.5 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      Setujui
+                      {loadingApproveId === tx.ticket_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      <span>{loadingApproveId === tx.ticket_id ? 'Memproses...' : 'Setujui'}</span>
                     </button>
                     <button
                       onClick={() => setRejectModalTx(tx)}
