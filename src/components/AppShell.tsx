@@ -25,6 +25,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { User, UserRole } from '@/types';
+import { useMultiDeviceStatus } from '@/lib/useRealtimeSync';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -34,6 +35,7 @@ interface AppShellProps {
 export default function AppShell({ children, activeMenu }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isConnected, deviceCount } = useMultiDeviceStatus();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -235,9 +237,24 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-sm tracking-wide">PIGEON</h1>
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Live
+              <span
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                  isConnected
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-amber-500/20 text-amber-300'
+                }`}
+                title={
+                  isConnected
+                    ? `Sinkronisasi Multi-Device Aktif (${deviceCount} perangkat terhubung)`
+                    : 'Menghubungkan Multi-Device...'
+                }
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                ></span>
+                {deviceCount > 1 ? `${deviceCount} Devs` : 'Live'}
               </span>
             </div>
             <p className="text-[10px] text-slate-400">ICT Lab 1 & 2 Organizer</p>
@@ -269,9 +286,24 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 leading-tight">Sekolah Mutiara Bangsa</p>
-              <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold w-fit">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Live Realtime</span>
+              <div
+                className={`mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold w-fit transition-all ${
+                  isConnected
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                }`}
+                title={`Sinkronisasi Multi-Device Aktif: ${deviceCount} perangkat online`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                ></span>
+                <span>
+                  {isConnected
+                    ? `Multi-Device Realtime (${deviceCount > 0 ? deviceCount : 1})`
+                    : 'Menghubungkan Realtime...'}
+                </span>
               </div>
             </div>
           </div>

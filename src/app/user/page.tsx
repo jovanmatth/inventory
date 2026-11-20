@@ -1420,7 +1420,8 @@ function UserDashboardContent() {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               );
             })()}
