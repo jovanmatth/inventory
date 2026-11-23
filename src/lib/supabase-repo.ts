@@ -394,7 +394,7 @@ async function syncStatusesSupabase() {
                 })
                 .eq('item_id', it.item_id);
 
-              await supabaseAdmin.from('inventory_history').insert({
+              await supabaseAdmin.from('transaction_history').insert({
                 log_id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 item_id: it.item_id,
                 action_type: 'Stock_Out',

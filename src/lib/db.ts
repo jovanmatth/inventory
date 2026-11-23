@@ -469,7 +469,7 @@ function syncStatusesSqlite() {
           `).run(newQty, newQty === 0 ? 'Borrowed' : item.status, it.item_id);
 
           db.prepare(`
-            INSERT INTO Inventory_History (log_id, item_id, action_type, qty_changed, timestamp, performed_by)
+            INSERT INTO Transaction_History (log_id, item_id, action_type, qty_changed, timestamp, performed_by)
             VALUES (?, ?, 'Stock_Out', ?, ?, ?)
           `).run(`LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`, it.item_id, -it.qty_borrowed, nowIso, row.user_id);
         }
@@ -534,7 +534,7 @@ export const transactionRepo = {
       for (const row of rows) {
         Object.assign(row, parseReturnMetadata(row.rejection_reason));
         row.items = db.prepare(`
-          SELECT ti.*, i.item_name, i.brand, i.location
+          SELECT ti.*, COALESCE(ti.borrowing_type, i.borrowing_type, 'Loan') as borrowing_type, i.item_name, i.brand, i.location
           FROM Transaction_Items ti
           LEFT JOIN Inventory i ON ti.item_id = i.item_id
           WHERE ti.ticket_id = ?
@@ -560,7 +560,7 @@ export const transactionRepo = {
       if (row) {
         Object.assign(row, parseReturnMetadata(row.rejection_reason));
         row.items = db.prepare(`
-          SELECT ti.*, i.item_name, i.brand, i.location
+          SELECT ti.*, COALESCE(ti.borrowing_type, i.borrowing_type, 'Loan') as borrowing_type, i.item_name, i.brand, i.location
           FROM Transaction_Items ti
           LEFT JOIN Inventory i ON ti.item_id = i.item_id
           WHERE ti.ticket_id = ?

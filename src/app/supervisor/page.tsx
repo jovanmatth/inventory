@@ -82,8 +82,32 @@ function SupervisorDashboardContent() {
   const [verifyReturnModalTx, setVerifyReturnModalTx] = useState<BorrowingTransaction | null>(null);
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [loadingApproveId, setLoadingApproveId] = useState<string | null>(null);
+  const [loadingPickupId, setLoadingPickupId] = useState<string | null>(null);
   const [submittingCheckout, setSubmittingCheckout] = useState(false);
   const returnFormRef = React.useRef<HTMLDivElement>(null);
+
+  const handleConfirmPickup = async (ticketId: string) => {
+    if (loadingPickupId) return;
+    setLoadingPickupId(ticketId);
+    const performerId = currentUser?.user_id || 'USR-002';
+    try {
+      const res = await fetch(`/api/transactions/${ticketId}/pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performed_by: performerId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+
+      showNotification(data.message);
+      setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    } finally {
+      setLoadingPickupId(null);
+    }
+  };
 
   const handleConfirmVerifyReturn = async () => {
     if (!verifyReturnModalTx) return;
@@ -1267,20 +1291,115 @@ function SupervisorDashboardContent() {
 
       {/* TAB 6: MONITORING */}
       {activeTab === 'monitoring' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <h2 className="text-base font-bold text-slate-900">Pemantauan Sistem Laboratorium</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <h4 className="font-bold text-xs mb-2">Stok ICT Lab 1</h4>
-              <p className="text-xl font-black text-slate-900">
-                {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 1')?.total_qty || 0} unit
-              </p>
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <h2 className="text-base font-bold text-slate-900">Pemantauan Sistem Laboratorium</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <h4 className="font-bold text-xs mb-2">Stok ICT Lab 1</h4>
+                <p className="text-xl font-black text-slate-900">
+                  {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 1')?.total_qty || 0} unit
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Rusak: {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 1')?.damaged_items || 0} • Menipis: {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 1')?.low_stock_items || 0}
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <h4 className="font-bold text-xs mb-2">Stok ICT Lab 2</h4>
+                <p className="text-xl font-black text-slate-900">
+                  {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 2')?.total_qty || 0} unit
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Rusak: {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 2')?.damaged_items || 0} • Menipis: {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 2')?.low_stock_items || 0}
+                </p>
+              </div>
             </div>
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <h4 className="font-bold text-xs mb-2">Stok ICT Lab 2</h4>
-              <p className="text-xl font-black text-slate-900">
-                {stats?.stats?.labStats?.find((l: any) => l.location === 'ICT Lab 2')?.total_qty || 0} unit
-              </p>
+          </div>
+
+          {/* Active Loans & Pickup Confirmation list */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h3 className="text-sm font-bold text-slate-900 mb-3">Daftar Peminjaman Aktif & Siap Ambil</h3>
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="p-3">Tiket ID</th>
+                    <th className="p-3">Peminjam</th>
+                    <th className="p-3">Barang Terpinjam</th>
+                    <th className="p-3">Jadwal Kembali</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {activeLoans.map((tx) => (
+                    <tr key={tx.ticket_id} className="hover:bg-slate-50/80">
+                      <td className="p-3 font-mono font-bold text-slate-900">{tx.ticket_id}</td>
+                      <td className="p-3">
+                        <p className="font-semibold text-slate-900">{tx.user_name}</p>
+                        <p className="text-[10px] text-slate-500">{tx.user_email}</p>
+                      </td>
+                      <td className="p-3">
+                        {tx.items?.map((it) => (
+                          <span key={it.id} className="inline-block mr-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                            {it.item_name} ({it.qty_borrowed})
+                          </span>
+                        ))}
+                      </td>
+                      <td className="p-3">
+                        {tx.expected_return_date ? (
+                          <span className="text-slate-700">{formatDueDateTime(tx.expected_return_date)}</span>
+                        ) : (
+                          <span className="text-slate-400">Habis Pakai</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.status === 'Overdue'
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : tx.status === 'Picked_Up'
+                              ? 'bg-blue-100 text-blue-800'
+                              : tx.status === 'Ready_for_Pickup'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                        >
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                        {tx.status !== 'Picked_Up' && (
+                          <button
+                            disabled={loadingPickupId === tx.ticket_id}
+                            onClick={() => handleConfirmPickup(tx.ticket_id)}
+                            className="px-2.5 py-1 bg-pigeon-600 hover:bg-pigeon-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            {loadingPickupId === tx.ticket_id && <Loader2 className="w-3 h-3 animate-spin" />}
+                            <span>{loadingPickupId === tx.ticket_id ? 'Memproses...' : 'Ambil Barang (Pickup)'}</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedReturnTx(tx);
+                            setReturnTicketId(tx.ticket_id);
+                            setActiveTab('returns');
+                          }}
+                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                        >
+                          Kembalikan
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {activeLoans.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-slate-400 text-xs">
+                        Tidak ada peminjaman aktif atau barang yang menunggu diambil saat ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -139,11 +139,32 @@ export async function GET() {
 
     // 3. Overdue Transactions
     const nowIso = new Date().toISOString();
+    try {
+      // Auto-transition Picked_Up borrowings that passed return date to 'Overdue'
+      db.prepare(`
+        UPDATE Borrowing_Transactions 
+        SET status = 'Overdue' 
+        WHERE status = 'Picked_Up' 
+          AND expected_return_date IS NOT NULL 
+          AND expected_return_date < ?
+      `).run(nowIso);
+
+      // Auto-expire unpicked/unapproved tickets whose schedule ended
+      db.prepare(`
+        UPDATE Borrowing_Transactions 
+        SET status = 'Rejected', 
+            rejection_reason = 'Dibatalkan otomatis: Jadwal peminjaman telah berakhir dan barang tidak diambil oleh peminjam.'
+        WHERE status IN ('Approved', 'Ready_for_Pickup', 'Pending_Approval', 'In_Queue')
+          AND expected_return_date IS NOT NULL 
+          AND expected_return_date < ?
+      `).run(nowIso);
+    } catch {}
+
     const overdueTransactions = db.prepare(`
       SELECT t.*, u.name as user_name, u.email as user_email
       FROM Borrowing_Transactions t
       LEFT JOIN Users u ON t.user_id = u.user_id
-      WHERE t.status IN ('Overdue', 'Picked_Up', 'Approved', 'Ready_for_Pickup') 
+      WHERE t.status IN ('Overdue', 'Picked_Up') 
         AND t.expected_return_date IS NOT NULL 
         AND t.expected_return_date < ?
       ORDER BY t.expected_return_date ASC
