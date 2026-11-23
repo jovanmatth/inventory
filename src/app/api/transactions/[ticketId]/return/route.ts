@@ -111,17 +111,26 @@ export async function POST(
           penalty_status: 'Restricted_1_Week',
           restriction_end_date: nextWeek.toISOString(),
         });
-      } else if ((isLate && lateDays >= 2) || finalResolution === 'Not_Resolved') {
+      } else if (finalResolution === 'Not_Resolved') {
+        // If return issue is not resolved, restrict temporarily until settlement
         await userRepo.update({
           ...borrower,
           penalty_status: 'Restricted_Temp',
           restriction_end_date: null,
         });
-      } else if (isLate || returned_condition === 'Damaged_Light') {
-        if (borrower.penalty_status === 'None') {
+      } else if (isLate && lateDays >= 2 && finalResolution !== 'Resolved') {
+        await userRepo.update({
+          ...borrower,
+          penalty_status: 'Restricted_Temp',
+          restriction_end_date: null,
+        });
+      } else if (isLate || returned_condition === 'Damaged_Light' || (isLate && lateDays >= 2 && finalResolution === 'Resolved')) {
+        // If resolved, ensure borrower receives a Warning record without unfair permanent lockout
+        if (borrower.penalty_status === 'None' || borrower.penalty_status === 'Restricted_Temp') {
           await userRepo.update({
             ...borrower,
             penalty_status: 'Warning',
+            restriction_end_date: null,
           });
         }
       }

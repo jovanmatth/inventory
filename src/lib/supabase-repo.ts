@@ -297,26 +297,40 @@ async function syncStatusesSupabase() {
   if (!isSupabaseConfigured() || !supabaseAdmin) return;
   const nowIso = new Date().toISOString();
 
-  // 1. Auto-transition to Overdue when expected_return_date has passed
+  // 1. Auto-transition active borrowings (Picked_Up) that have passed expected return date to 'Overdue'
   try {
     await supabaseAdmin
       .from('borrowing_transactions')
       .update({ status: 'Overdue' })
       .not('expected_return_date', 'is', null)
       .lte('expected_return_date', nowIso)
-      .in('status', ['Picked_Up', 'Approved', 'Ready_for_Pickup']);
+      .eq('status', 'Picked_Up');
   } catch (err) {
     console.warn('Auto overdue check error:', err);
   }
 
-  // 2. Auto-transition to Picked_Up when borrow_date (waktu ambil) has arrived
+  // 1b. Auto-expire unpicked / unapproved tickets whose schedule has ended
+  try {
+    await supabaseAdmin
+      .from('borrowing_transactions')
+      .update({
+        status: 'Rejected',
+        rejection_reason: 'Dibatalkan otomatis: Jadwal peminjaman telah berakhir dan barang tidak diambil oleh peminjam.',
+      })
+      .not('expected_return_date', 'is', null)
+      .lte('expected_return_date', nowIso)
+      .in('status', ['Approved', 'Ready_for_Pickup', 'Pending_Approval', 'In_Queue']);
+  } catch (err) {
+    console.warn('Auto expire check error:', err);
+  }
+
+  // 2. Auto-transition to Picked_Up (or Returned for Habis Pakai) when borrow_date has arrived
   try {
     const { data: readyTxs } = await supabaseAdmin
       .from('borrowing_transactions')
-      .select('ticket_id, user_id, transaction_items(item_id, qty_borrowed)')
+      .select('ticket_id, user_id, transaction_items(item_id, qty_borrowed, borrowing_type)')
       .in('status', ['Approved', 'Ready_for_Pickup'])
-      .lte('borrow_date', nowIso)
-      .gt('expected_return_date', nowIso);
+      .lte('borrow_date', nowIso);
 
     if (readyTxs && readyTxs.length > 0) {
       for (const tx of readyTxs) {
@@ -348,12 +362,29 @@ async function syncStatusesSupabase() {
               });
             }
           }
-        }
 
-        await supabaseAdmin
-          .from('borrowing_transactions')
-          .update({ status: 'Picked_Up' })
-          .eq('ticket_id', tx.ticket_id);
+          const hasLoan = tx.transaction_items.some((it: any) => it.borrowing_type === 'Loan');
+          if (!hasLoan) {
+            const completedPayload = JSON.stringify({
+              type: 'RETURNED',
+              returned_at: nowIso,
+              received_by: tx.user_id,
+              returned_condition: 'Good',
+              resolution_status: 'Resolved',
+              notes: 'Barang Habis Pakai / Used telah diserahkan (tidak perlu dikembalikan).',
+              penalty: 'Tidak ada sanksi (Barang Habis Pakai)',
+            });
+            await supabaseAdmin
+              .from('borrowing_transactions')
+              .update({ status: 'Returned', rejection_reason: completedPayload })
+              .eq('ticket_id', tx.ticket_id);
+          } else {
+            await supabaseAdmin
+              .from('borrowing_transactions')
+              .update({ status: 'Picked_Up' })
+              .eq('ticket_id', tx.ticket_id);
+          }
+        }
       }
     }
   } catch (err) {

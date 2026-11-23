@@ -34,6 +34,7 @@ import {
   BorrowingTransaction,
   ReturnedCondition,
   ResolutionStatus,
+  User,
 } from '@/types';
 import { calculateDueDateLocal, formatDueDateTime } from '@/lib/date-utils';
 
@@ -43,6 +44,7 @@ function SupervisorDashboardContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'overview';
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [stats, setStats] = useState<any>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -87,14 +89,16 @@ function SupervisorDashboardContent() {
     if (!verifyReturnModalTx) return;
     setSubmittingReturn(true);
 
-    let performerId = 'USR-002';
-    try {
-      const saved = localStorage.getItem('pigeon_last_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.user_id) performerId = u.user_id;
-      }
-    } catch { }
+    let performerId = currentUser?.user_id || 'USR-002';
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem('pigeon_last_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.user_id) performerId = u.user_id;
+        }
+      } catch { }
+    }
 
     try {
       const res = await fetch(`/api/transactions/${verifyReturnModalTx.ticket_id}/return`, {
@@ -133,7 +137,7 @@ function SupervisorDashboardContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reason: rejectReturnReason.trim() || 'Foto bukti pengembalian tidak valid / barang fisik belum diterima di laboratorium.',
-          rejected_by: 'Supervisor ICT Lab',
+          rejected_by: currentUser?.name ? `${currentUser.name} (Supervisor)` : 'Supervisor ICT Lab',
         }),
       });
       const data = await res.json();
@@ -172,6 +176,17 @@ function SupervisorDashboardContent() {
     };
     window.addEventListener('pigeon:set-tab', handleSetTab);
     return () => window.removeEventListener('pigeon:set-tab', handleSetTab);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Load all supervisor data with silent background sync
@@ -258,12 +273,23 @@ function SupervisorDashboardContent() {
     if (submittingCheckout) return;
     setSubmittingCheckout(true);
 
+    let borrowerId = currentUser?.user_id || 'USR-002';
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem('pigeon_last_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.user_id) borrowerId = u.user_id;
+        }
+      } catch {}
+    }
+
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: 'USR-002', // Dr. Hendra Gunawan (Supervisor)
+          user_id: borrowerId,
           transaction_type: borrowType,
           purpose: borrowPurpose,
           borrow_date: new Date().toISOString(),
@@ -296,11 +322,12 @@ function SupervisorDashboardContent() {
   const handleApprove = async (ticketId: string) => {
     if (loadingApproveId) return;
     setLoadingApproveId(ticketId);
+    const approverId = currentUser?.user_id || 'USR-002';
     try {
       const res = await fetch(`/api/transactions/${ticketId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', approved_by: 'USR-002' }),
+        body: JSON.stringify({ action: 'approve', approved_by: approverId }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
@@ -317,13 +344,14 @@ function SupervisorDashboardContent() {
 
   const handleReject = async () => {
     if (!rejectModalTx) return;
+    const approverId = currentUser?.user_id || 'USR-002';
     try {
       const res = await fetch(`/api/transactions/${rejectModalTx.ticket_id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'reject',
-          approved_by: 'USR-002',
+          approved_by: approverId,
           rejection_reason: rejectionReason,
         }),
       });
@@ -345,14 +373,16 @@ function SupervisorDashboardContent() {
     if (!selectedReturnTx) return;
     setSubmittingReturn(true);
 
-    let performerId = 'USR-002';
-    try {
-      const saved = localStorage.getItem('pigeon_last_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.user_id) performerId = u.user_id;
-      }
-    } catch { }
+    let performerId = currentUser?.user_id || 'USR-002';
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem('pigeon_last_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.user_id) performerId = u.user_id;
+        }
+      } catch { }
+    }
 
     try {
       const res = await fetch(`/api/transactions/${selectedReturnTx.ticket_id}/return`, {

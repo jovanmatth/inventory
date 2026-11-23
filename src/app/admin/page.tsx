@@ -46,6 +46,7 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'overview';
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Data states
   const [stats, setStats] = useState<any>(null);
@@ -94,14 +95,16 @@ function AdminDashboardContent() {
     if (!verifyReturnModalTx) return;
     setSubmittingReturn(true);
 
-    let performerId = 'USR-001';
-    try {
-      const saved = localStorage.getItem('pigeon_last_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.user_id) performerId = u.user_id;
-      }
-    } catch { }
+    let performerId = currentUser?.user_id || 'USR-001';
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem('pigeon_last_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.user_id) performerId = u.user_id;
+        }
+      } catch { }
+    }
 
     try {
       const res = await fetch(`/api/transactions/${verifyReturnModalTx.ticket_id}/return`, {
@@ -180,6 +183,17 @@ function AdminDashboardContent() {
     };
     window.addEventListener('pigeon:set-tab', handleSetTab);
     return () => window.removeEventListener('pigeon:set-tab', handleSetTab);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Load all data with silent real-time background sync
@@ -284,7 +298,7 @@ function AdminDashboardContent() {
       condition: formData.get('condition') as string,
       date_added: formData.get('date_added') as string || new Date().toISOString().split('T')[0],
       borrowing_type: formData.get('borrowing_type') as BorrowingType,
-      performed_by: 'USR-001',
+      performed_by: currentUser?.user_id || 'USR-001',
     };
 
     const isEdit = Boolean(editingItem);
@@ -341,7 +355,7 @@ function AdminDashboardContent() {
           target_location: transferLocation,
           target_detail: transferDetail,
           transfer_qty: transferQty,
-          performed_by: 'USR-001',
+          performed_by: currentUser?.user_id || 'USR-001',
         }),
       });
       const data = await res.json();
@@ -362,10 +376,11 @@ function AdminDashboardContent() {
     if (loadingApproveId) return;
     setLoadingApproveId(ticketId);
     try {
+      const approverId = currentUser?.user_id || 'USR-001';
       const res = await fetch(`/api/transactions/${ticketId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', approved_by: 'USR-001' }),
+        body: JSON.stringify({ action: 'approve', approved_by: approverId }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
@@ -382,13 +397,14 @@ function AdminDashboardContent() {
 
   const handleReject = async () => {
     if (!rejectModalTx) return;
+    const approverId = currentUser?.user_id || 'USR-001';
     try {
       const res = await fetch(`/api/transactions/${rejectModalTx.ticket_id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'reject',
-          approved_by: 'USR-001',
+          approved_by: approverId,
           rejection_reason: rejectionReason,
         }),
       });
@@ -409,11 +425,12 @@ function AdminDashboardContent() {
   const handleConfirmPickup = async (ticketId: string) => {
     if (loadingPickupId) return;
     setLoadingPickupId(ticketId);
+    const performerId = currentUser?.user_id || 'USR-001';
     try {
       const res = await fetch(`/api/transactions/${ticketId}/pickup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ performed_by: 'USR-001' }),
+        body: JSON.stringify({ performed_by: performerId }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
@@ -434,14 +451,16 @@ function AdminDashboardContent() {
     if (!selectedReturnTx) return;
     setSubmittingReturn(true);
 
-    let performerId = 'USR-001';
-    try {
-      const saved = localStorage.getItem('pigeon_last_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.user_id) performerId = u.user_id;
-      }
-    } catch { }
+    let performerId = currentUser?.user_id || 'USR-001';
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem('pigeon_last_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.user_id) performerId = u.user_id;
+        }
+      } catch { }
+    }
 
     try {
       const res = await fetch(`/api/transactions/${selectedReturnTx.ticket_id}/return`, {
@@ -1151,6 +1170,9 @@ function AdminDashboardContent() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-mono font-black text-slate-900 text-sm">{tx.ticket_id}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-700" /> Menunggu Approval
+                            </span>
                             <div className="flex items-center gap-1.5">
                               {(() => {
                                 const reqDate = tx.return_requested_at ? new Date(tx.return_requested_at) : new Date();
@@ -1372,9 +1394,8 @@ function AdminDashboardContent() {
 
                   return (
                     <div
-                      className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
-                        isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                      }`}
+                      className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                        }`}
                     >
                       <div className="flex items-center justify-between font-bold">
                         <span className="flex items-center gap-1.5 text-xs">
@@ -1399,8 +1420,8 @@ function AdminDashboardContent() {
                             {lateDays <= 1
                               ? 'Terlambat 1 hari: Peringatan (Warning)'
                               : lateDays <= 3
-                              ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
-                              : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
+                                ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
+                                : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
                           </>
                         ) : (
                           'Pengembalian dilakukan tepat waktu sebelum batas jadwal berakhir. Bebas sanksi keterlambatan.'
@@ -1527,15 +1548,19 @@ function AdminDashboardContent() {
                       </td>
                       <td className="p-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            tx.status === 'Overdue'
-                              ? 'bg-red-100 text-red-800 border border-red-200'
-                              : tx.status === 'Picked_Up'
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.status === 'Overdue'
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : tx.status === 'Picked_Up'
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.status === 'Overdue'
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : tx.status === 'Picked_Up'
                               ? 'bg-blue-100 text-blue-800'
                               : tx.status === 'Ready_for_Pickup'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                            }`}
                         >
                           {tx.status}
                         </span>
@@ -2198,9 +2223,8 @@ function AdminDashboardContent() {
 
               return (
                 <div
-                  className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
-                    isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  }`}
+                  className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                    }`}
                 >
                   <div className="flex items-center justify-between font-bold">
                     <span className="flex items-center gap-1.5 text-xs">
@@ -2225,8 +2249,8 @@ function AdminDashboardContent() {
                         {lateDays <= 1
                           ? 'Terlambat 1 hari: Peringatan (Warning)'
                           : lateDays <= 3
-                          ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
-                          : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
+                            ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
+                            : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
                       </>
                     ) : (
                       'Pengembalian dilakukan tepat waktu sebelum batas jadwal berakhir. Bebas sanksi keterlambatan.'

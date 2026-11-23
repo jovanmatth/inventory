@@ -69,7 +69,11 @@ export async function POST(request: NextRequest) {
     const hasActiveOverdue = userActiveTxs.some((t) => {
       if (t.status === 'Returned' || t.status === 'Rejected') return false;
       if (t.status === 'Overdue') return true;
-      if (t.expected_return_date && new Date(t.expected_return_date).getTime() <= Date.now()) {
+      if (
+        t.status === 'Picked_Up' &&
+        t.expected_return_date &&
+        new Date(t.expected_return_date).getTime() <= Date.now()
+      ) {
         return true;
       }
       return false;

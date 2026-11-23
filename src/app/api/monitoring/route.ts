@@ -48,12 +48,24 @@ export async function GET() {
       // 4. Overdue Transactions from Supabase
       const nowIso = new Date().toISOString();
       try {
+        // Auto-transition Picked_Up borrowings that passed return date to 'Overdue'
         await supabaseAdmin
           .from('borrowing_transactions')
           .update({ status: 'Overdue' })
           .not('expected_return_date', 'is', null)
           .lt('expected_return_date', nowIso)
-          .in('status', ['Picked_Up', 'Approved', 'Ready_for_Pickup']);
+          .eq('status', 'Picked_Up');
+
+        // Auto-expire unpicked/unapproved tickets whose schedule ended
+        await supabaseAdmin
+          .from('borrowing_transactions')
+          .update({
+            status: 'Rejected',
+            rejection_reason: 'Dibatalkan otomatis: Jadwal peminjaman telah berakhir dan barang tidak diambil oleh peminjam.',
+          })
+          .not('expected_return_date', 'is', null)
+          .lt('expected_return_date', nowIso)
+          .in('status', ['Approved', 'Ready_for_Pickup', 'Pending_Approval', 'In_Queue']);
       } catch {}
 
       const { data: overdueTx } = await supabaseAdmin
@@ -61,7 +73,7 @@ export async function GET() {
         .select('*, users(name, email)')
         .not('expected_return_date', 'is', null)
         .lt('expected_return_date', nowIso)
-        .in('status', ['Overdue', 'Picked_Up', 'Approved', 'Ready_for_Pickup']);
+        .in('status', ['Overdue', 'Picked_Up']);
 
       const overdueTransactions = (overdueTx || []).map((t: any) => ({
         ...t,

@@ -259,7 +259,7 @@ function UserDashboardContent() {
   const hasActiveOverdueLoan = transactions.some((t) => {
     if (t.status === 'Returned' || t.status === 'Rejected') return false;
     if (t.status === 'Overdue') return true;
-    if (t.expected_return_date && new Date(t.expected_return_date).getTime() <= Date.now()) return true;
+    if (t.status === 'Picked_Up' && t.expected_return_date && new Date(t.expected_return_date).getTime() <= Date.now()) return true;
     return false;
   });
 
@@ -1481,9 +1481,14 @@ function UserDashboardContent() {
 
             {/* Quick Select from Active Borrowed Tickets */}
             {(() => {
-              const activeBorrowed = transactions.filter(
-                (t) => (t.status === 'Picked_Up' || t.status === 'Overdue' || t.is_return_pending) && t.status !== 'Returned'
-              );
+              const activeBorrowed = transactions.filter((t) => {
+                if (t.status === 'Returned' || t.status === 'Rejected') return false;
+                const requiresReturn = t.items?.some((it) => it.borrowing_type === 'Loan');
+                return (
+                  requiresReturn &&
+                  (t.status === 'Picked_Up' || t.status === 'Overdue' || t.is_return_pending)
+                );
+              });
 
               return (
                 <div className="space-y-2">
@@ -2071,10 +2076,9 @@ function UserDashboardContent() {
             {(() => {
               const isTicketOverdue =
                 selectedTicket.status === 'Overdue' ||
-                (!!selectedTicket.expected_return_date &&
-                  new Date(selectedTicket.expected_return_date!).getTime() <= Date.now() &&
-                  selectedTicket.status !== 'Returned' &&
-                  selectedTicket.status !== 'Rejected');
+                (selectedTicket.status === 'Picked_Up' &&
+                  !!selectedTicket.expected_return_date &&
+                  new Date(selectedTicket.expected_return_date!).getTime() <= Date.now());
 
               const isPickupTimeArrived =
                 (selectedTicket.status === 'Ready_for_Pickup' || selectedTicket.status === 'Approved') &&

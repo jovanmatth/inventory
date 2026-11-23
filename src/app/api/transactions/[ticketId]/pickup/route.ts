@@ -53,6 +53,26 @@ export async function POST(
       }
     }
 
+    const hasLoanItems = tx.items?.some((it) => it.borrowing_type === 'Loan');
+    if (!hasLoanItems && tx.items && tx.items.length > 0) {
+      // All items are Habis Pakai or Used - no return needed!
+      const completedPayload = JSON.stringify({
+        type: 'RETURNED',
+        returned_at: new Date().toISOString(),
+        received_by: performed_by || tx.user_id,
+        returned_condition: 'Good',
+        resolution_status: 'Resolved',
+        notes: 'Barang Habis Pakai / Used telah diserahkan (tidak perlu dikembalikan).',
+        penalty: 'Tidak ada sanksi (Barang Habis Pakai)',
+      });
+      await transactionRepo.updateStatus(ticketId, 'Returned', performed_by || tx.user_id, completedPayload);
+
+      return NextResponse.json({
+        success: true,
+        message: `Pengambilan barang Habis Pakai / Used untuk Tiket ${ticketId} selesai. Barang tidak perlu dikembalikan.`,
+      });
+    }
+
     await transactionRepo.updateStatus(ticketId, 'Picked_Up');
 
     return NextResponse.json({

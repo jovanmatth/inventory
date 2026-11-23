@@ -384,33 +384,45 @@ function syncStatusesSqlite() {
   if (!db) return;
   const nowIso = new Date().toISOString();
 
-  // 1. Auto-transition to Overdue when expected_return_date has passed
+  // 1. Auto-transition active borrowings (Picked_Up) that have passed expected return date to 'Overdue'
   try {
     db.prepare(`
       UPDATE Borrowing_Transactions
       SET status = 'Overdue'
       WHERE expected_return_date IS NOT NULL
         AND expected_return_date <= ?
-        AND status IN ('Picked_Up', 'Approved', 'Ready_for_Pickup')
+        AND status = 'Picked_Up'
     `).run(nowIso);
   } catch {}
 
-  // 2. Auto-transition to Picked_Up when borrow_date (waktu ambil) has arrived
+  // 1b. Auto-expire unpicked / unapproved tickets whose schedule has ended
+  try {
+    db.prepare(`
+      UPDATE Borrowing_Transactions
+      SET status = 'Rejected',
+          rejection_reason = 'Dibatalkan otomatis: Jadwal peminjaman telah berakhir dan barang tidak diambil oleh peminjam.'
+      WHERE expected_return_date IS NOT NULL
+        AND expected_return_date <= ?
+        AND status IN ('Approved', 'Ready_for_Pickup', 'Pending_Approval', 'In_Queue')
+    `).run(nowIso);
+  } catch {}
+
+  // 2. Auto-transition to Picked_Up (or Returned for Habis Pakai) when borrow_date has arrived
   try {
     const rows = db.prepare(`
       SELECT ticket_id, user_id
       FROM Borrowing_Transactions
       WHERE status IN ('Approved', 'Ready_for_Pickup')
         AND borrow_date <= ?
-        AND expected_return_date > ?
+        AND (expected_return_date IS NULL OR expected_return_date > ?)
     `).all(nowIso, nowIso) as { ticket_id: string; user_id: string }[];
 
     for (const row of rows) {
       const items = db.prepare(`
-        SELECT item_id, qty_borrowed
+        SELECT item_id, qty_borrowed, borrowing_type
         FROM Transaction_Items
         WHERE ticket_id = ?
-      `).all(row.ticket_id) as { item_id: string; qty_borrowed: number }[];
+      `).all(row.ticket_id) as { item_id: string; qty_borrowed: number; borrowing_type: string }[];
 
       for (const it of items) {
         const item = db.prepare(`SELECT * FROM Inventory WHERE item_id = ?`).get(it.item_id) as any;
@@ -429,7 +441,21 @@ function syncStatusesSqlite() {
         }
       }
 
-      db.prepare(`UPDATE Borrowing_Transactions SET status = 'Picked_Up' WHERE ticket_id = ?`).run(row.ticket_id);
+      const hasLoan = items.some((it) => it.borrowing_type === 'Loan');
+      if (!hasLoan && items.length > 0) {
+        const completedPayload = JSON.stringify({
+          type: 'RETURNED',
+          returned_at: nowIso,
+          received_by: row.user_id,
+          returned_condition: 'Good',
+          resolution_status: 'Resolved',
+          notes: 'Barang Habis Pakai / Used telah diserahkan (tidak perlu dikembalikan).',
+          penalty: 'Tidak ada sanksi (Barang Habis Pakai)',
+        });
+        db.prepare(`UPDATE Borrowing_Transactions SET status = 'Returned', rejection_reason = ? WHERE ticket_id = ?`).run(completedPayload, row.ticket_id);
+      } else {
+        db.prepare(`UPDATE Borrowing_Transactions SET status = 'Picked_Up' WHERE ticket_id = ?`).run(row.ticket_id);
+      }
     }
   } catch {}
 }
