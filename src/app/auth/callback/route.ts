@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { userRepo } from '@/lib/data-provider';
+import { hashPin } from '@/lib/auth-utils';
 
 const DEFAULT_SUPABASE_URL = 'https://hiezrrvpkwsegeexgwsf.supabase.co';
 const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZXpycnZwa3dzZWdlZXhnd3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5NzM3NjcsImV4cCI6MjExMDU0OTc2N30.1sJcxsL7hkg_gIfIqJpnNlWoAMdYNRJTW1RkruxFOvY';
@@ -79,6 +80,25 @@ export async function GET(request: NextRequest) {
   }
 
   // ==========================================
+  // AUTO-SET DEFAULT PIN 1234 IF NO PIN
+  // Sesuai aturan: jika awalnya gunakan google auth maka buat pin nya otomatis 1234
+  // ==========================================
+  const defaultPinHash = hashPin('1234');
+  let isDefaultPin = false;
+
+  if (!dbUser.pin) {
+    const updatedUser = {
+      ...dbUser,
+      pin: defaultPinHash,
+      pin_changed: 0,
+    };
+    await userRepo.update(updatedUser);
+    isDefaultPin = true;
+  } else if (!dbUser.pin_changed || dbUser.pin === defaultPinHash) {
+    isDefaultPin = true;
+  }
+
+  // ==========================================
   // AUTHENTICATION SUCCESS: Role Routing
   // ==========================================
   let redirectPath = '/user';
@@ -86,6 +106,10 @@ export async function GET(request: NextRequest) {
     redirectPath = '/admin';
   } else if (dbUser.role === 'Supervisor') {
     redirectPath = '/supervisor';
+  }
+
+  if (isDefaultPin) {
+    redirectPath += (redirectPath.includes('?') ? '&' : '?') + 'require_pin=true';
   }
 
   const response = NextResponse.redirect(`${origin}${redirectPath}`);

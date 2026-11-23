@@ -23,6 +23,12 @@ import {
   UserCheck,
   ArrowRightLeft,
   Clock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  AlertOctagon,
+  Lock,
 } from 'lucide-react';
 import { User, UserRole } from '@/types';
 import { useMultiDeviceStatus } from '@/lib/useRealtimeSync';
@@ -41,6 +47,15 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
 
+  // Mandatory PIN Setup States
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [showPinToggle, setShowPinToggle] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinSuccess, setPinSuccess] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+
   useEffect(() => {
     fetch('/api/auth/me')
       .then((res) => {
@@ -53,6 +68,14 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
           try {
             localStorage.setItem('pigeon_last_user', JSON.stringify(data.user));
           } catch {}
+
+          // If user is on default PIN (1234) or URL requires pin setup, open mandatory PIN modal
+          if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (data.user.is_default_pin || urlParams.get('require_pin') === 'true') {
+              setShowPinModal(true);
+            }
+          }
         } else {
           router.push('/');
         }
@@ -64,6 +87,63 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
         setLoading(false);
       });
   }, [router]);
+
+  const handleUpdatePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+    setPinSuccess(null);
+
+    if (newPinInput.length !== 4 || !/^\d{4}$/.test(newPinInput)) {
+      setPinError('PIN harus tepat 4 digit angka (0-9).');
+      return;
+    }
+
+    if (newPinInput !== confirmPinInput) {
+      setPinError('Konfirmasi PIN tidak cocok dengan PIN baru.');
+      return;
+    }
+
+    setPinLoading(true);
+    try {
+      const res = await fetch('/api/auth/update-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: newPinInput, confirm_pin: confirmPinInput }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Gagal menyimpan PIN baru.');
+      }
+
+      setPinSuccess('PIN 4-angka Anda berhasil disimpan!');
+      if (currentUser) {
+        const updated: User = { ...currentUser, has_pin: true, is_default_pin: false };
+        setCurrentUser(updated);
+        try {
+          localStorage.setItem('pigeon_last_user', JSON.stringify(updated));
+        } catch {}
+      }
+
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('require_pin')) {
+          url.searchParams.delete('require_pin');
+          window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+        }
+      }
+
+      setTimeout(() => {
+        setShowPinModal(false);
+        setNewPinInput('');
+        setConfirmPinInput('');
+        setPinSuccess(null);
+      }, 1000);
+    } catch (err: any) {
+      setPinError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setPinLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -379,6 +459,19 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
         {/* Session Loop / Footer Navigation */}
         <div className="p-3 border-t border-slate-800 space-y-2">
           <button
+            onClick={() => setShowPinModal(true)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700/80 rounded-lg transition-colors cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <KeyRound className="w-3.5 h-3.5 text-pigeon-400" />
+              <span>Atur PIN Akun</span>
+            </span>
+            <span className="text-[10px] text-pigeon-400 font-semibold font-mono">
+              {currentUser?.is_default_pin ? 'Perlu Dibuat' : '4-Digit'}
+            </span>
+          </button>
+
+          <button
             onClick={() => setShowSessionModal(true)}
             className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700/80 rounded-lg transition-colors"
           >
@@ -463,9 +556,25 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
+                  setShowPinModal(true);
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 bg-slate-800 text-xs font-medium rounded-lg text-slate-300"
+              >
+                <span className="flex items-center gap-2">
+                  <KeyRound className="w-3.5 h-3.5 text-pigeon-400" />
+                  <span>Atur PIN Akun</span>
+                </span>
+                <span className="text-[10px] text-pigeon-400 font-mono">
+                  {currentUser?.is_default_pin ? 'Perlu Dibuat' : '4-Digit'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
                   setShowSessionModal(true);
                 }}
-                className="w-full py-2 bg-slate-800 text-xs font-medium rounded-lg text-slate-300"
+                className="w-full py-2 bg-slate-800 text-xs font-medium rounded-lg text-slate-300 text-center"
               >
                 Another Action? (Sesi)
               </button>
@@ -485,6 +594,141 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
       <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
         {children}
       </main>
+
+      {/* MANDATORY / USER PIN SETUP MODAL */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 text-left animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-pigeon-50 border border-pigeon-200 text-pigeon-600 flex items-center justify-center font-bold shadow-sm">
+                <KeyRound className="w-6 h-6 text-pigeon-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-slate-900 text-base">Wajib Membuat PIN 4-Angka</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    Wajib
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Keamanan Akun & Multi-Device Login
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs text-amber-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                PIN Default Sementara: <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-amber-900 font-bold">1234</span>
+              </p>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Akun Anda berhasil masuk melalui Google Auth. Demi keamanan akun, Anda diwajibkan membuat PIN 4-angka Anda sendiri sekarang agar otomatis memiliki PIN tetap untuk login langsung di perangkat lain.
+              </p>
+            </div>
+
+            <form onSubmit={handleUpdatePin} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Email Akun Terdaftar:
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={currentUser?.email || ''}
+                  className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-mono"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    PIN 4-Angka Baru:
+                  </label>
+                  <span className="text-[10px] text-slate-400">4 digit angka (0-9)</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPinToggle ? 'text' : 'password'}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    placeholder="Contoh: 5678"
+                    value={newPinInput}
+                    onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    required
+                    className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-pigeon-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPinToggle(!showPinToggle)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPinToggle ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Konfirmasi PIN 4-Angka:
+                  </label>
+                </div>
+                <input
+                  type={showPinToggle ? 'text' : 'password'}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  placeholder="Ulangi 4 digit PIN baru"
+                  value={confirmPinInput}
+                  onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  required
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-pigeon-500"
+                />
+              </div>
+
+              {pinError && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-1.5">
+                  <AlertOctagon className="w-4 h-4 text-red-500 shrink-0" />
+                  <span>{pinError}</span>
+                </div>
+              )}
+
+              {pinSuccess && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>{pinSuccess}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={pinLoading || newPinInput.length !== 4 || confirmPinInput.length !== 4}
+                className="w-full py-3 bg-pigeon-600 hover:bg-pigeon-700 active:bg-pigeon-800 text-white font-bold text-xs rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {pinLoading ? (
+                  <span>Menyimpan PIN...</span>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    <span>Simpan PIN & Masuk Sistem</span>
+                  </>
+                )}
+              </button>
+
+              {!currentUser?.is_default_pin && (
+                <button
+                  type="button"
+                  onClick={() => setShowPinModal(false)}
+                  className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 text-center cursor-pointer"
+                >
+                  Tutup
+                </button>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Session Loop Modal: "Another Action?" */}
       {showSessionModal && (

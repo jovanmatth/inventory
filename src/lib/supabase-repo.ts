@@ -35,8 +35,9 @@ export const hybridUserRepo = {
     }
     if (user) {
       const local = sqliteUserRepo.getByEmail(user.email);
-      if (local?.pin) {
-        user.pin = local.pin;
+      if (local) {
+        if (local.pin) user.pin = local.pin;
+        user.pin_changed = local.pin_changed ?? 0;
       }
     }
     return user;
@@ -57,8 +58,9 @@ export const hybridUserRepo = {
     }
     if (user) {
       const local = sqliteUserRepo.getById(user.user_id);
-      if (local?.pin) {
-        user.pin = local.pin;
+      if (local) {
+        if (local.pin) user.pin = local.pin;
+        user.pin_changed = local.pin_changed ?? 0;
       }
     }
     return user;
@@ -82,6 +84,7 @@ export const hybridUserRepo = {
         ...u,
         pin: local?.pin || u.pin || null,
         has_pin: Boolean(local?.pin || u.pin),
+        pin_changed: local?.pin_changed ?? u.pin_changed ?? 0,
       };
     });
   },

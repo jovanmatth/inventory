@@ -11,6 +11,8 @@ export interface User {
   restriction_end_date: string | null;
   pin?: string | null;
   has_pin?: boolean;
+  pin_changed?: boolean | number;
+  is_default_pin?: boolean;
 }
 
 export type LabLocation = 'ICT Lab 1' | 'ICT Lab 2';

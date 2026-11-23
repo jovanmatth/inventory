@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
     const updatedUser = {
       ...user,
       pin: hashed,
+      pin_changed: 1,
     };
     await userRepo.update(updatedUser);
 

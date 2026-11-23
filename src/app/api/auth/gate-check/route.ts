@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userRepo } from '@/lib/data-provider';
-import { verifyPin } from '@/lib/auth-utils';
+import { verifyPin, hashPin } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,23 +43,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Gate Check 3: PIN Validation (Only for manual credentials login)
-    // If user has not set a PIN yet, guide them to create/activate PIN
+    // Otomatisasi: jika belum memiliki PIN, set default 1234
+    const defaultPinHash = hashPin('1234');
     if (!user.pin) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: 'PIN_NOT_SET',
-          message:
-            'Akun Anda telah terdaftar di Whitelist, namun belum memiliki PIN. Silakan buat PIN 4-angka Anda terlebih dahulu pada tab "Buat Akun / Atur PIN".',
-          user: {
-            user_id: user.user_id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-          },
-        },
-        { status: 403 }
-      );
+      user.pin = defaultPinHash;
+      user.pin_changed = 0;
+      await userRepo.update(user);
     }
 
     if (!pin) {
@@ -67,7 +56,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           code: 'PIN_REQUIRED',
-          message: 'PIN 4-angka wajib diisi untuk masuk.',
+          message: 'PIN 4-angka wajib diisi untuk masuk (Gunakan 1234 jika login awal).',
         },
         { status: 400 }
       );
@@ -84,12 +73,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isDefaultPin = Boolean(!user.pin_changed || user.pin === defaultPinHash);
+
     // Determine dashboard routing
     let redirectUrl = '/user';
     if (user.role === 'Admin') {
       redirectUrl = '/admin';
     } else if (user.role === 'Supervisor') {
       redirectUrl = '/supervisor';
+    }
+
+    if (isDefaultPin) {
+      redirectUrl += (redirectUrl.includes('?') ? '&' : '?') + 'require_pin=true';
     }
 
     const safeUser = {
@@ -100,6 +95,7 @@ export async function POST(request: NextRequest) {
       penalty_status: user.penalty_status,
       restriction_end_date: user.restriction_end_date,
       has_pin: true,
+      is_default_pin: isDefaultPin,
     };
 
     // Create session cookie

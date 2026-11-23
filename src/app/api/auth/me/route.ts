@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userRepo } from '@/lib/data-provider';
+import { hashPin } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
   const userId = request.cookies.get('pigeon_user_id')?.value;
@@ -21,6 +22,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const defaultPinHash = hashPin('1234');
+  const isDefaultPin = Boolean(!user.pin_changed || user.pin === defaultPinHash);
   const { pin, ...safeUser } = user;
-  return NextResponse.json({ authenticated: true, user: { ...safeUser, has_pin: Boolean(pin) } });
+  return NextResponse.json({
+    authenticated: true,
+    user: {
+      ...safeUser,
+      has_pin: Boolean(pin),
+      is_default_pin: isDefaultPin,
+    },
+  });
 }
