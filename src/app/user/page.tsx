@@ -256,6 +256,13 @@ function UserDashboardContent() {
     pollIntervalMs: 3500,
   });
 
+  const hasActiveOverdueLoan = transactions.some((t) => {
+    if (t.status === 'Returned' || t.status === 'Rejected') return false;
+    if (t.status === 'Overdue') return true;
+    if (t.expected_return_date && new Date(t.expected_return_date).getTime() <= Date.now()) return true;
+    return false;
+  });
+
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setAlertMsg({ type, text });
     setTimeout(() => setAlertMsg(null), 4000);
@@ -264,6 +271,10 @@ function UserDashboardContent() {
   const handleAddToCart = (item: InventoryItem) => {
     if (currentUser?.penalty_status === 'Restricted_Temp' || currentUser?.penalty_status === 'Restricted_1_Week') {
       showNotification('Akun Anda sedang dalam masa pembatasan sanksi. Tidak dapat meminjam barang.', 'error');
+      return;
+    }
+    if (hasActiveOverdueLoan) {
+      showNotification('Anda memiliki pinjaman yang telah melewati batas pengembalian (Overdue). Harap kembalikan barang terlebih dahulu sebelum meminjam barang baru.', 'error');
       return;
     }
     if (item.qty <= 0) {
@@ -356,6 +367,10 @@ function UserDashboardContent() {
   const handleAddToReserveCart = (item: InventoryItem) => {
     if (currentUser?.penalty_status === 'Restricted_Temp' || currentUser?.penalty_status === 'Restricted_1_Week') {
       showNotification('Akun Anda sedang dalam masa pembatasan sanksi. Tidak dapat mereservasi barang.', 'error');
+      return;
+    }
+    if (hasActiveOverdueLoan) {
+      showNotification('Anda memiliki pinjaman yang telah melewati batas pengembalian (Overdue). Harap kembalikan barang terlebih dahulu sebelum membuat reservasi baru.', 'error');
       return;
     }
     if (item.qty <= 0) {
@@ -510,9 +525,32 @@ function UserDashboardContent() {
               <p className="text-red-700 mt-0.5">
                 {currentUser.penalty_status === 'Warning'
                   ? 'Anda memiliki catatan peringatan dari pengembalian sebelumnya. Harap selalu menjaga dan mengembalikan barang tepat waktu.'
+                  : currentUser.penalty_status === 'Restricted_1_Week' && currentUser.restriction_end_date
+                  ? `Peminjaman barang dinonaktifkan sementara hingga ${new Date(currentUser.restriction_end_date).toLocaleString('id-ID')} karena keterlambatan pengembalian.`
                   : 'Peminjaman barang dinonaktifkan sementara hingga masa pembatasan selesai atau penyelesaian ganti rugi disetujui Admin ICT.'}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Active Overdue Alert Banner */}
+        {hasActiveOverdueLoan && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold text-amber-950">Perhatian: Anda Memiliki Barang Melewati Batas Pengembalian (Overdue)</p>
+                <p className="text-amber-800 mt-0.5">
+                  Segera serahkan barang fisik ke ICT Lab dan unggah foto bukti di menu Pengembalian Barang untuk menyelesaikan tiket dan menghindari sanksi penangguhan akun.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('return')}
+              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-sm shrink-0 whitespace-nowrap cursor-pointer transition-colors"
+            >
+              Kembalikan Sekarang
+            </button>
           </div>
         )}
 
@@ -1471,6 +1509,10 @@ function UserDashboardContent() {
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
                                   ⏳ Menunggu Approval
                                 </span>
+                              ) : tx.status === 'Overdue' || (tx.expected_return_date && new Date(tx.expected_return_date).getTime() <= Date.now()) ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-300">
+                                  ⚠️ Overdue
+                                </span>
                               ) : (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-900">
                                   {tx.status}
@@ -1543,6 +1585,11 @@ function UserDashboardContent() {
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                         <Clock className="w-3 h-3 text-amber-700" />
                         Menunggu Approval
+                      </span>
+                    ) : selectedReturnTx.status === 'Overdue' || (selectedReturnTx.expected_return_date && new Date(selectedReturnTx.expected_return_date).getTime() <= Date.now()) ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-3 h-3 text-red-600" />
+                        Status: Overdue (Terlambat)
                       </span>
                     ) : (
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900">
@@ -1700,6 +1747,18 @@ function UserDashboardContent() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitReturnRequest} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                    {(selectedReturnTx.status === 'Overdue' || (selectedReturnTx.expected_return_date && new Date(selectedReturnTx.expected_return_date).getTime() <= Date.now())) && (
+                      <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Pengembalian Ini Melewati Batas Waktu (Overdue)</p>
+                          <p className="text-amber-800 mt-0.5">
+                            Waktu pengembalian tercatat saat Anda menekan tombol kirim di bawah. Segera serahkan fisik barang ke staf ICT Lab agar verifikasi dapat diproses.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {selectedReturnTx.return_rejection_note && (
                       <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -1923,6 +1982,14 @@ function UserDashboardContent() {
                             </span>
                           ))}
                         </div>
+
+                        {tx.penalty && tx.penalty !== 'Tidak ada sanksi (Kondisi Baik & Tepat Waktu)' && (
+                          <div className="pt-1">
+                            <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-lg font-medium inline-flex items-center gap-1">
+                              ⚠️ Catatan Sanksi / Isu: {tx.penalty}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Thumbnail of proof + Action buttons */}
@@ -2091,6 +2158,12 @@ function UserDashboardContent() {
                   )}
                   {selectedTicket.resolution_status && (
                     <p><span className="text-slate-500">Status Resolusi:</span> <span className="font-bold text-slate-800">{selectedTicket.resolution_status}</span></p>
+                  )}
+                  {selectedTicket.penalty && selectedTicket.penalty !== 'Tidak ada sanksi (Kondisi Baik & Tepat Waktu)' && (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 mt-2">
+                      <p className="font-bold text-[11px] text-amber-950">Catatan Sanksi / Isu Pengembalian:</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">{selectedTicket.penalty}</p>
+                    </div>
                   )}
                 </>
               ) : (

@@ -38,11 +38,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'User tidak ditemukan' }, { status: 404 });
     }
 
+    // Auto-lift 1-week restriction if restriction period has ended
+    if (user.penalty_status === 'Restricted_1_Week' && user.restriction_end_date) {
+      if (new Date(user.restriction_end_date).getTime() <= Date.now()) {
+        await userRepo.update({
+          ...user,
+          penalty_status: 'None',
+          restriction_end_date: null,
+        });
+        user.penalty_status = 'None';
+        user.restriction_end_date = null;
+      }
+    }
+
     if (user.penalty_status === 'Restricted_Temp' || user.penalty_status === 'Restricted_1_Week') {
+      const untilStr = user.restriction_end_date
+        ? new Date(user.restriction_end_date).toLocaleString('id-ID')
+        : 'penyelesaian masalah oleh Admin ICT';
       return NextResponse.json(
         {
           success: false,
-          message: `Pengajuan ditolak. Akun Anda sedang dalam status sanksi (${user.penalty_status}) hingga ${user.restriction_end_date || 'penyelesaian masalah'}.`,
+          message: `Pengajuan ditolak. Akun Anda sedang dalam status sanksi (${user.penalty_status}) hingga ${untilStr}.`,
+        },
+        { status: 403 }
+      );
+    }
+
+    // Check if user currently has unreturned overdue loans
+    const userActiveTxs = await transactionRepo.getAll({ user_id: user.user_id });
+    const hasActiveOverdue = userActiveTxs.some((t) => {
+      if (t.status === 'Returned' || t.status === 'Rejected') return false;
+      if (t.status === 'Overdue') return true;
+      if (t.expected_return_date && new Date(t.expected_return_date).getTime() <= Date.now()) {
+        return true;
+      }
+      return false;
+    });
+
+    if (hasActiveOverdue) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Pengajuan ditolak. Anda memiliki peminjaman barang yang telah melewati batas pengembalian (Overdue). Harap selesaikan pengembalian barang tersebut terlebih dahulu di menu Pengembalian Barang.',
         },
         { status: 403 }
       );

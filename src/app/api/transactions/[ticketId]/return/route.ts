@@ -41,7 +41,7 @@ export async function POST(
       validReceivedBy = fallback?.user_id || 'USR-001';
     }
 
-    const actualReturnDate = new Date(return_date || new Date().toISOString());
+    const actualReturnDate = new Date(tx.return_requested_at || return_date || new Date().toISOString());
     let isLate = false;
     let lateDays = 0;
 

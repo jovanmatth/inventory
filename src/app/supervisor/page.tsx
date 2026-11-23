@@ -910,14 +910,42 @@ function SupervisorDashboardContent() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-mono font-black text-slate-900 text-sm">{tx.ticket_id}</span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-700" /> Menunggu Approval
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {(() => {
+                                const reqDate = tx.return_requested_at ? new Date(tx.return_requested_at) : new Date();
+                                const isLate = tx.expected_return_date ? reqDate.getTime() > new Date(tx.expected_return_date).getTime() : false;
+                                const lateDays = isLate && tx.expected_return_date ? Math.ceil((reqDate.getTime() - new Date(tx.expected_return_date).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                                if (isLate) {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-900 border border-red-300 flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3 text-red-600" /> Terlambat {lateDays} Hari
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3 text-emerald-600" /> Tepat Waktu
+                                  </span>
+                                );
+                              })()}
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-700" /> Menunggu Approval
+                              </span>
+                            </div>
                           </div>
 
                           <p className="text-xs text-slate-700">
                             <span className="font-semibold">Peminjam:</span> {tx.user_name} ({tx.user_email})
                           </p>
+
+                          <div className="text-[11px] text-slate-500 space-y-0.5">
+                            {tx.expected_return_date && (
+                              <p>Batas Pengembalian: <span className="font-semibold text-slate-700">{formatDueDateTime(tx.expected_return_date)}</span></p>
+                            )}
+                            {tx.return_requested_at && (
+                              <p>Waktu Diajukan: <span className="font-semibold text-slate-700">{new Date(tx.return_requested_at).toLocaleString('id-ID')}</span></p>
+                            )}
+                          </div>
 
                           {tx.return_notes && (
                             <div className="p-2 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900">
@@ -1083,6 +1111,58 @@ function SupervisorDashboardContent() {
                   </div>
                 </div>
 
+                {/* Time Check & Penalty Preview */}
+                {(() => {
+                  const reqDate = selectedReturnTx.return_requested_at
+                    ? new Date(selectedReturnTx.return_requested_at)
+                    : new Date();
+                  const isLate = selectedReturnTx.expected_return_date
+                    ? reqDate.getTime() > new Date(selectedReturnTx.expected_return_date).getTime()
+                    : false;
+                  const lateDays = isLate && selectedReturnTx.expected_return_date
+                    ? Math.ceil((reqDate.getTime() - new Date(selectedReturnTx.expected_return_date).getTime()) / (1000 * 60 * 60 * 24))
+                    : 0;
+
+                  return (
+                    <div
+                      className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+                        isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-bold">
+                        <span className="flex items-center gap-1.5 text-xs">
+                          {isLate ? (
+                            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                          )}
+                          <span>
+                            {isLate ? `Pemeriksaan Waktu: Terlambat ${lateDays} Hari` : 'Pemeriksaan Waktu: Tepat Waktu'}
+                          </span>
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-600">
+                          Batas: {formatDueDateTime(selectedReturnTx.expected_return_date)}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-700">
+                        {isLate ? (
+                          <>
+                            <span className="font-bold text-red-800">Sanksi Sistem Berdasarkan Aturan: </span>
+                            {lateDays <= 1
+                              ? 'Terlambat 1 hari: Peringatan (Warning)'
+                              : lateDays <= 3
+                              ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
+                              : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
+                          </>
+                        ) : (
+                          'Pengembalian dilakukan tepat waktu sebelum batas jadwal berakhir. Bebas sanksi keterlambatan.'
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-bold text-slate-800 mb-1">Kondisi Fisik Barang (Quality Check):</label>
@@ -1242,6 +1322,58 @@ function SupervisorDashboardContent() {
                 </div>
               </div>
             )}
+
+            {/* Time Check & Penalty Preview */}
+            {(() => {
+              const reqDate = verifyReturnModalTx.return_requested_at
+                ? new Date(verifyReturnModalTx.return_requested_at)
+                : new Date();
+              const isLate = verifyReturnModalTx.expected_return_date
+                ? reqDate.getTime() > new Date(verifyReturnModalTx.expected_return_date).getTime()
+                : false;
+              const lateDays = isLate && verifyReturnModalTx.expected_return_date
+                ? Math.ceil((reqDate.getTime() - new Date(verifyReturnModalTx.expected_return_date).getTime()) / (1000 * 60 * 60 * 24))
+                : 0;
+
+              return (
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+                    isLate ? 'bg-red-50 border-red-200 text-red-950' : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      {isLate ? (
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                      <span>
+                        {isLate ? `Pemeriksaan Waktu: Terlambat ${lateDays} Hari` : 'Pemeriksaan Waktu: Tepat Waktu'}
+                      </span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-600">
+                      Batas: {formatDueDateTime(verifyReturnModalTx.expected_return_date)}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-700">
+                    {isLate ? (
+                      <>
+                        <span className="font-bold text-red-800">Sanksi Sistem Berdasarkan Aturan: </span>
+                        {lateDays <= 1
+                          ? 'Terlambat 1 hari: Peringatan (Warning)'
+                          : lateDays <= 3
+                          ? `Terlambat ${lateDays} hari: Peringatan + Pembatasan Peminjaman Sementara`
+                          : `Terlambat ${lateDays} hari: Pembatasan Peminjaman Selama 1 Minggu`}
+                      </>
+                    ) : (
+                      'Pengembalian dilakukan tepat waktu sebelum batas jadwal berakhir. Bebas sanksi keterlambatan.'
+                    )}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Quality Check & Resolution */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">

@@ -304,9 +304,7 @@ async function syncStatusesSupabase() {
       .update({ status: 'Overdue' })
       .not('expected_return_date', 'is', null)
       .lte('expected_return_date', nowIso)
-      .neq('status', 'Returned')
-      .neq('status', 'Rejected')
-      .neq('status', 'Overdue');
+      .in('status', ['Picked_Up', 'Approved', 'Ready_for_Pickup']);
   } catch (err) {
     console.warn('Auto overdue check error:', err);
   }

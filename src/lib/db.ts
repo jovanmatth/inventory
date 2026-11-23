@@ -391,7 +391,7 @@ function syncStatusesSqlite() {
       SET status = 'Overdue'
       WHERE expected_return_date IS NOT NULL
         AND expected_return_date <= ?
-        AND status NOT IN ('Returned', 'Rejected', 'Overdue')
+        AND status IN ('Picked_Up', 'Approved', 'Ready_for_Pickup')
     `).run(nowIso);
   } catch {}
 
