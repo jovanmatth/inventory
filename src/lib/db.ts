@@ -54,7 +54,8 @@ export function initDatabase() {
         email TEXT NOT NULL UNIQUE,
         role TEXT CHECK(role IN ('Admin', 'Supervisor', 'User')) NOT NULL,
         penalty_status TEXT CHECK(penalty_status IN ('None', 'Warning', 'Restricted_Temp', 'Restricted_1_Week')) DEFAULT 'None',
-        restriction_end_date TEXT
+        restriction_end_date TEXT,
+        pin TEXT
       );
 
       CREATE TABLE IF NOT EXISTS Inventory (
@@ -118,6 +119,16 @@ export function initDatabase() {
         performed_by TEXT NOT NULL REFERENCES Users(user_id)
       );
     `);
+
+    try {
+      db.exec(`ALTER TABLE Users ADD COLUMN pin TEXT;`);
+    } catch {}
+
+    try {
+      // Set default demo PIN '1234' for existing seed users if null
+      const defaultPinHash = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+      db.prepare(`UPDATE Users SET pin = ? WHERE pin IS NULL`).run(defaultPinHash);
+    } catch {}
   } catch (e: any) {
     console.warn('initDatabase skipped:', e?.message);
   }
@@ -159,10 +170,10 @@ export const userRepo = {
     if (!db) return;
     try {
       const stmt = db.prepare(`
-        INSERT INTO Users (user_id, name, email, role, penalty_status, restriction_end_date)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO Users (user_id, name, email, role, penalty_status, restriction_end_date, pin)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
-      stmt.run(user.user_id, user.name, user.email, user.role, user.penalty_status, user.restriction_end_date);
+      stmt.run(user.user_id, user.name, user.email, user.role, user.penalty_status, user.restriction_end_date, user.pin || null);
     } catch (e) {
       console.warn('SQLite userRepo.create failed:', e);
     }
@@ -172,10 +183,10 @@ export const userRepo = {
     try {
       const stmt = db.prepare(`
         UPDATE Users
-        SET name = ?, email = ?, role = ?, penalty_status = ?, restriction_end_date = ?
+        SET name = ?, email = ?, role = ?, penalty_status = ?, restriction_end_date = ?, pin = ?
         WHERE user_id = ?
       `);
-      stmt.run(user.name, user.email, user.role, user.penalty_status, user.restriction_end_date, user.user_id);
+      stmt.run(user.name, user.email, user.role, user.penalty_status, user.restriction_end_date, user.pin || null, user.user_id);
     } catch (e) {
       console.warn('SQLite userRepo.update failed:', e);
     }

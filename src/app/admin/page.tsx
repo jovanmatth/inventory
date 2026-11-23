@@ -30,6 +30,7 @@ import {
   CheckCircle,
   X,
   Loader2,
+  KeyRound,
 } from 'lucide-react';
 import {
   User,
@@ -193,7 +194,7 @@ function AdminDashboardContent() {
           setCurrentUser(data.user);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Load all data with silent real-time background sync
@@ -235,12 +236,18 @@ function AdminDashboardContent() {
   const handleSaveUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const payload = {
+    const payload: any = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
       role: formData.get('role') as string,
       penalty_status: formData.get('penalty_status') as string,
     };
+
+    const initialPin = formData.get('pin') as string;
+    if (initialPin) payload.pin = initialPin;
+
+    const resetPin = formData.get('reset_pin') === 'on';
+    if (resetPin) payload.reset_pin = true;
 
     const isEdit = Boolean(editingUser);
     const url = '/api/users';
@@ -255,9 +262,37 @@ function AdminDashboardContent() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
 
-      showNotification(data.message || (isEdit ? 'User Data Updated' : 'User Added Successfully'));
+      showNotification(data.message || (isEdit ? 'Data User Berhasil Diperbarui' : 'User Berhasil Ditambahkan ke Whitelist'));
       setShowAddUserModal(false);
       setEditingUser(null);
+      setRefreshTrigger((v) => v + 1);
+      broadcastDataChange();
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    }
+  };
+
+  const handleResetUserPin = async (user: User) => {
+    if (!confirm(`Reset PIN 4-angka untuk ${user.name}? Pengguna akan diminta membuat PIN baru saat login.`)) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          penalty_status: user.penalty_status,
+          reset_pin: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+
+      showNotification(`PIN untuk ${user.name} berhasil di-reset.`);
       setRefreshTrigger((v) => v + 1);
       broadcastDataChange();
     } catch (err: any) {
@@ -794,6 +829,7 @@ function AdminDashboardContent() {
                   <th className="p-3">Nama</th>
                   <th className="p-3">Email (@mutiarabangsa.sch.id)</th>
                   <th className="p-3">Role</th>
+                  <th className="p-3">Status PIN</th>
                   <th className="p-3">Status Sanksi</th>
                   <th className="p-3 text-right">Aksi</th>
                 </tr>
@@ -816,6 +852,19 @@ function AdminDashboardContent() {
                       </span>
                     </td>
                     <td className="p-3">
+                      {u.has_pin ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>PIN Aktif</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>Belum Set</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">
                       {u.penalty_status === 'None' ? (
                         <span className="text-slate-400">Normal</span>
                       ) : (
@@ -826,18 +875,25 @@ function AdminDashboardContent() {
                     </td>
                     <td className="p-3 text-right space-x-1">
                       <button
+                        onClick={() => handleResetUserPin(u)}
+                        className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg inline-block"
+                        title="Reset PIN User (User harus mengatur ulang PIN)"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => {
                           setEditingUser(u);
                           setShowAddUserModal(true);
                         }}
-                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg inline-block"
                         title="Edit User"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setUserToDelete(u)}
-                        className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
+                        className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg inline-block"
                         title="Delete User"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1551,15 +1607,10 @@ function AdminDashboardContent() {
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.status === 'Overdue'
                             ? 'bg-red-100 text-red-800 border border-red-200'
                             : tx.status === 'Picked_Up'
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.status === 'Overdue'
-                            ? 'bg-red-100 text-red-800 border border-red-200'
-                            : tx.status === 'Picked_Up'
                               ? 'bg-blue-100 text-blue-800'
                               : tx.status === 'Ready_for_Pickup'
                                 ? 'bg-purple-100 text-purple-800'
                                 : 'bg-emerald-100 text-emerald-800'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : 'bg-emerald-100 text-emerald-800'
                             }`}
                         >
                           {tx.status}
@@ -1781,6 +1832,36 @@ function AdminDashboardContent() {
                   <option value="Restricted_1_Week">Restricted_1_Week (Pembatasan 1 Minggu)</option>
                 </select>
               </div>
+
+              {editingUser ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-900">
+                    <input type="checkbox" name="reset_pin" className="rounded text-pigeon-600 focus:ring-pigeon-500" />
+                    <span>Reset PIN Pengguna Ini</span>
+                  </label>
+                  <p className="text-[10px] text-amber-700 pl-5">
+                    Pengguna harus membuat PIN 4-angka baru saat login berikutnya (cocok jika pengguna lupa PIN).
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    PIN 4-Angka Awal (Opsional):
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    name="pin"
+                    placeholder="Contoh: 1234 (atau kosongkan)"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-pigeon-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Jika dikosongkan, pengguna dapat membuat PIN 4-angka sendiri di halaman login via tab Aktivasi Akun.
+                  </p>
+                </div>
+              )}
 
               <div className="pt-3 flex justify-end gap-2">
                 <button

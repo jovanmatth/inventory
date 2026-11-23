@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   penalty_status: PenaltyStatus;
   restriction_end_date: string | null;
+  pin?: string | null;
+  has_pin?: boolean;
 }
 
 export type LabLocation = 'ICT Lab 1' | 'ICT Lab 2';

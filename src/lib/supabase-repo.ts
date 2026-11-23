@@ -21,66 +21,105 @@ import {
 
 export const hybridUserRepo = {
   async getByEmail(email: string): Promise<User | undefined> {
+    let user: User | undefined;
     if (isSupabaseConfigured() && supabaseAdmin) {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .ilike('email', email)
         .maybeSingle();
-      if (!error && data) return data as User;
+      if (!error && data) user = data as User;
     }
-    return sqliteUserRepo.getByEmail(email);
+    if (!user) {
+      user = sqliteUserRepo.getByEmail(email);
+    }
+    if (user) {
+      const local = sqliteUserRepo.getByEmail(user.email);
+      if (local?.pin) {
+        user.pin = local.pin;
+      }
+    }
+    return user;
   },
 
   async getById(id: string): Promise<User | undefined> {
+    let user: User | undefined;
     if (isSupabaseConfigured() && supabaseAdmin) {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .eq('user_id', id)
         .maybeSingle();
-      if (!error && data) return data as User;
+      if (!error && data) user = data as User;
     }
-    return sqliteUserRepo.getById(id);
+    if (!user) {
+      user = sqliteUserRepo.getById(id);
+    }
+    if (user) {
+      const local = sqliteUserRepo.getById(user.user_id);
+      if (local?.pin) {
+        user.pin = local.pin;
+      }
+    }
+    return user;
   },
 
   async getAll(): Promise<User[]> {
+    let users: User[] = [];
     if (isSupabaseConfigured() && supabaseAdmin) {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .order('name', { ascending: true });
-      if (!error && data) return data as User[];
+      if (!error && data) users = data as User[];
     }
-    return sqliteUserRepo.getAll();
+    if (!users.length) {
+      users = sqliteUserRepo.getAll();
+    }
+    return users.map((u) => {
+      const local = sqliteUserRepo.getById(u.user_id) || sqliteUserRepo.getByEmail(u.email);
+      return {
+        ...u,
+        pin: local?.pin || u.pin || null,
+        has_pin: Boolean(local?.pin || u.pin),
+      };
+    });
   },
 
   async create(user: User): Promise<void> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      await supabaseAdmin.from('users').insert({
-        user_id: user.user_id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        penalty_status: user.penalty_status,
-        restriction_end_date: user.restriction_end_date,
-      });
+      try {
+        await supabaseAdmin.from('users').insert({
+          user_id: user.user_id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          penalty_status: user.penalty_status,
+          restriction_end_date: user.restriction_end_date,
+        });
+      } catch (err) {
+        console.warn('Supabase user insert skipped/error:', err);
+      }
     }
     sqliteUserRepo.create(user);
   },
 
   async update(user: User): Promise<void> {
     if (isSupabaseConfigured() && supabaseAdmin) {
-      await supabaseAdmin
-        .from('users')
-        .update({
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          penalty_status: user.penalty_status,
-          restriction_end_date: user.restriction_end_date,
-        })
-        .eq('user_id', user.user_id);
+      try {
+        await supabaseAdmin
+          .from('users')
+          .update({
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            penalty_status: user.penalty_status,
+            restriction_end_date: user.restriction_end_date,
+          })
+          .eq('user_id', user.user_id);
+      } catch (err) {
+        console.warn('Supabase user update skipped/error:', err);
+      }
     }
     sqliteUserRepo.update(user);
   },

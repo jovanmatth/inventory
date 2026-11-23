@@ -21,5 +21,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ authenticated: true, user });
+  const { pin, ...safeUser } = user;
+  return NextResponse.json({ authenticated: true, user: { ...safeUser, has_pin: Boolean(pin) } });
 }

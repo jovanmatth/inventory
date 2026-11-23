@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userRepo } from '@/lib/data-provider';
+import { verifyPin } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, name } = body;
+    const { email, name, pin } = body;
 
     if (!email || typeof email !== 'string') {
       return NextResponse.json(
@@ -41,6 +42,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 3. Gate Check 3: PIN Validation (Only for manual credentials login)
+    // If user has not set a PIN yet, guide them to create/activate PIN
+    if (!user.pin) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PIN_NOT_SET',
+          message:
+            'Akun Anda telah terdaftar di Whitelist, namun belum memiliki PIN. Silakan buat PIN 4-angka Anda terlebih dahulu pada tab "Buat Akun / Atur PIN".',
+          user: {
+            user_id: user.user_id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!pin) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PIN_REQUIRED',
+          message: 'PIN 4-angka wajib diisi untuk masuk.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!verifyPin(pin, user.pin)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'INVALID_PIN',
+          message: 'PIN 4-angka salah. Harap periksa kembali PIN Anda.',
+        },
+        { status: 401 }
+      );
+    }
+
     // Determine dashboard routing
     let redirectUrl = '/user';
     if (user.role === 'Admin') {
@@ -49,12 +92,22 @@ export async function POST(request: NextRequest) {
       redirectUrl = '/supervisor';
     }
 
+    const safeUser = {
+      user_id: user.user_id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      penalty_status: user.penalty_status,
+      restriction_end_date: user.restriction_end_date,
+      has_pin: true,
+    };
+
     // Create session cookie
     const response = NextResponse.json({
       success: true,
       code: 'SUCCESS',
       message: `Authentication Success. Selamat datang, ${user.name}!`,
-      user,
+      user: safeUser,
       redirectUrl,
     });
 
