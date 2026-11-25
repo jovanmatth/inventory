@@ -114,6 +114,7 @@ export async function PUT(request: NextRequest) {
       penalty_status: penalty_status || 'None',
       restriction_end_date: restriction_end_date || null,
       pin: updatedPin,
+      pin_changed: reset_pin ? 0 : new_pin ? 1 : (existing?.pin_changed ?? 0),
     };
 
     await userRepo.update(updatedUser);

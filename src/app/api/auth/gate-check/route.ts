@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isDefaultPin = Boolean(!user.pin_changed || user.pin === defaultPinHash);
+    const isDefaultPin = !user.pin_changed;
 
     // Determine dashboard routing
     let redirectUrl = '/user';

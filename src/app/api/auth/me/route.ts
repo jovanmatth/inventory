@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   const defaultPinHash = hashPin('1234');
-  const isDefaultPin = Boolean(!user.pin_changed || user.pin === defaultPinHash);
+  const isDefaultPin = !user.pin_changed;
   const { pin, ...safeUser } = user;
   return NextResponse.json({
     authenticated: true,

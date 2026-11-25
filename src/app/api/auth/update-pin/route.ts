@@ -4,13 +4,13 @@ import { hashPin, isValidPin } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.cookies.get('pigeon_user_id')?.value;
-    if (!userId) {
-      return NextResponse.json({ success: false, message: 'Tidak terotentikasi' }, { status: 401 });
-    }
-
+    let userId = request.cookies.get('pigeon_user_id')?.value;
     const body = await request.json();
-    const { pin, confirm_pin } = body;
+    const { pin, confirm_pin, user_id, email } = body;
+
+    if (!userId && user_id) {
+      userId = user_id;
+    }
 
     if (!pin || !isValidPin(pin)) {
       return NextResponse.json(
@@ -26,9 +26,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await userRepo.getById(userId);
+    let user = userId ? await userRepo.getById(userId) : undefined;
+    if (!user && email) {
+      user = await userRepo.getByEmail(email);
+    }
+
     if (!user) {
-      return NextResponse.json({ success: false, message: 'Pengguna tidak ditemukan' }, { status: 404 });
+      return NextResponse.json({ success: false, message: 'Pengguna tidak ditemukan atau sesi telah berakhir' }, { status: 404 });
     }
 
     const hashedPin = hashPin(pin);
@@ -39,7 +43,7 @@ export async function POST(request: NextRequest) {
     };
     await userRepo.update(updatedUser);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'PIN 4-angka Anda berhasil disimpan!',
       user: {
@@ -52,6 +56,14 @@ export async function POST(request: NextRequest) {
         is_default_pin: false,
       },
     });
+
+    response.cookies.set('pigeon_user_id', user.user_id, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+      httpOnly: false,
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || 'Terjadi kesalahan sistem' },

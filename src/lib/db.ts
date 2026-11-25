@@ -177,14 +177,22 @@ export const userRepo = {
       const stmt = db.prepare(`
         INSERT INTO Users (user_id, name, email, role, penalty_status, restriction_end_date, pin, pin_changed)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          name = excluded.name,
+          email = excluded.email,
+          role = excluded.role,
+          penalty_status = excluded.penalty_status,
+          restriction_end_date = excluded.restriction_end_date,
+          pin = COALESCE(excluded.pin, Users.pin),
+          pin_changed = COALESCE(excluded.pin_changed, Users.pin_changed)
       `);
       stmt.run(
         user.user_id,
         user.name,
         user.email,
         user.role,
-        user.penalty_status,
-        user.restriction_end_date,
+        user.penalty_status || 'None',
+        user.restriction_end_date || null,
         user.pin || null,
         user.pin_changed ? 1 : 0
       );
@@ -200,7 +208,7 @@ export const userRepo = {
         SET name = ?, email = ?, role = ?, penalty_status = ?, restriction_end_date = ?, pin = ?, pin_changed = ?
         WHERE user_id = ?
       `);
-      stmt.run(
+      const info = stmt.run(
         user.name,
         user.email,
         user.role,
@@ -210,6 +218,9 @@ export const userRepo = {
         user.pin_changed ? 1 : 0,
         user.user_id
       );
+      if (info && info.changes === 0) {
+        userRepo.create(user);
+      }
     } catch (e) {
       console.warn('SQLite userRepo.update failed:', e);
     }

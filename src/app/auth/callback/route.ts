@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
     };
     await userRepo.update(updatedUser);
     isDefaultPin = true;
-  } else if (!dbUser.pin_changed || dbUser.pin === defaultPinHash) {
+  } else if (!dbUser.pin_changed) {
     isDefaultPin = true;
   }
 

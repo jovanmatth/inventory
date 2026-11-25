@@ -19,36 +19,115 @@ import {
 // HYBRID REPOSITORY: SUPABASE + SQLITE FALLBACK
 // ==========================================
 
+const SYS_PIN_STORE_ID = 'SYS-PIN-STORE';
+
+async function getSupabasePinsMap(): Promise<Record<string, { pin: string; pin_changed: number }>> {
+  if (!isSupabaseConfigured() || !supabaseAdmin) return {};
+  try {
+    const { data } = await supabaseAdmin
+      .from('users')
+      .select('name')
+      .eq('user_id', SYS_PIN_STORE_ID)
+      .maybeSingle();
+    if (data?.name) {
+      try {
+        return JSON.parse(data.name);
+      } catch {
+        return {};
+      }
+    }
+  } catch (e) {
+    console.warn('getSupabasePinsMap error:', e);
+  }
+  return {};
+}
+
+async function saveSupabasePin(userId: string, pin: string, pinChanged: number = 1): Promise<void> {
+  if (!isSupabaseConfigured() || !supabaseAdmin) return;
+  try {
+    const pinsMap = await getSupabasePinsMap();
+    pinsMap[userId] = { pin, pin_changed: pinChanged };
+    await supabaseAdmin.from('users').upsert({
+      user_id: SYS_PIN_STORE_ID,
+      name: JSON.stringify(pinsMap),
+      email: 'system.pinstore@mutiarabangsa.sch.id',
+      role: 'Admin',
+      penalty_status: 'None',
+    });
+  } catch (e) {
+    console.warn('saveSupabasePin error:', e);
+  }
+}
+
+async function deleteSupabasePin(userId: string): Promise<void> {
+  if (!isSupabaseConfigured() || !supabaseAdmin) return;
+  try {
+    const pinsMap = await getSupabasePinsMap();
+    if (pinsMap[userId]) {
+      delete pinsMap[userId];
+      await supabaseAdmin.from('users').upsert({
+        user_id: SYS_PIN_STORE_ID,
+        name: JSON.stringify(pinsMap),
+        email: 'system.pinstore@mutiarabangsa.sch.id',
+        role: 'Admin',
+        penalty_status: 'None',
+      });
+    }
+  } catch (e) {
+    console.warn('deleteSupabasePin error:', e);
+  }
+}
+
 export const hybridUserRepo = {
   async getByEmail(email: string): Promise<User | undefined> {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (trimmedEmail === 'system.pinstore@mutiarabangsa.sch.id') return undefined;
+
     let user: User | undefined;
     if (isSupabaseConfigured() && supabaseAdmin) {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
-        .ilike('email', email)
+        .neq('user_id', SYS_PIN_STORE_ID)
+        .ilike('email', trimmedEmail)
         .maybeSingle();
       if (!error && data) user = data as User;
     }
     if (!user) {
-      user = sqliteUserRepo.getByEmail(email);
+      user = sqliteUserRepo.getByEmail(trimmedEmail);
     }
-    if (user) {
-      const local = sqliteUserRepo.getByEmail(user.email);
-      if (local) {
-        if (local.pin) user.pin = local.pin;
+    if (user && user.user_id !== SYS_PIN_STORE_ID) {
+      const pinsMap = await getSupabasePinsMap();
+      const cloudPin = pinsMap[user.user_id] || pinsMap[user.email];
+      const local = sqliteUserRepo.getByEmail(user.email) || sqliteUserRepo.getById(user.user_id);
+
+      if (cloudPin?.pin) {
+        user.pin = cloudPin.pin;
+        user.pin_changed = cloudPin.pin_changed ?? 1;
+      } else if (local?.pin) {
+        user.pin = local.pin;
         user.pin_changed = local.pin_changed ?? 0;
       }
+
+      // Sync into local SQLite
+      sqliteUserRepo.update({
+        ...user,
+        pin: user.pin,
+        pin_changed: user.pin_changed ?? 0,
+      });
     }
     return user;
   },
 
   async getById(id: string): Promise<User | undefined> {
+    if (id === SYS_PIN_STORE_ID) return undefined;
+
     let user: User | undefined;
     if (isSupabaseConfigured() && supabaseAdmin) {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
+        .neq('user_id', SYS_PIN_STORE_ID)
         .eq('user_id', id)
         .maybeSingle();
       if (!error && data) user = data as User;
@@ -56,12 +135,25 @@ export const hybridUserRepo = {
     if (!user) {
       user = sqliteUserRepo.getById(id);
     }
-    if (user) {
-      const local = sqliteUserRepo.getById(user.user_id);
-      if (local) {
-        if (local.pin) user.pin = local.pin;
+    if (user && user.user_id !== SYS_PIN_STORE_ID) {
+      const pinsMap = await getSupabasePinsMap();
+      const cloudPin = pinsMap[user.user_id] || pinsMap[user.email];
+      const local = sqliteUserRepo.getById(user.user_id) || sqliteUserRepo.getByEmail(user.email);
+
+      if (cloudPin?.pin) {
+        user.pin = cloudPin.pin;
+        user.pin_changed = cloudPin.pin_changed ?? 1;
+      } else if (local?.pin) {
+        user.pin = local.pin;
         user.pin_changed = local.pin_changed ?? 0;
       }
+
+      // Sync into local SQLite
+      sqliteUserRepo.update({
+        ...user,
+        pin: user.pin,
+        pin_changed: user.pin_changed ?? 0,
+      });
     }
     return user;
   },
@@ -72,24 +164,40 @@ export const hybridUserRepo = {
       const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
+        .neq('user_id', SYS_PIN_STORE_ID)
         .order('name', { ascending: true });
       if (!error && data) users = data as User[];
     }
     if (!users.length) {
       users = sqliteUserRepo.getAll();
     }
+    users = users.filter((u) => u.user_id !== SYS_PIN_STORE_ID);
+
+    const pinsMap = await getSupabasePinsMap();
     return users.map((u) => {
+      const cloudPin = pinsMap[u.user_id] || pinsMap[u.email];
       const local = sqliteUserRepo.getById(u.user_id) || sqliteUserRepo.getByEmail(u.email);
+      const pin = cloudPin?.pin || local?.pin || u.pin || null;
+      const pin_changed = cloudPin?.pin_changed ?? local?.pin_changed ?? u.pin_changed ?? 0;
+
+      // Sync into SQLite
+      sqliteUserRepo.update({
+        ...u,
+        pin,
+        pin_changed,
+      });
+
       return {
         ...u,
-        pin: local?.pin || u.pin || null,
-        has_pin: Boolean(local?.pin || u.pin),
-        pin_changed: local?.pin_changed ?? u.pin_changed ?? 0,
+        pin,
+        has_pin: Boolean(pin),
+        pin_changed,
       };
     });
   },
 
   async create(user: User): Promise<void> {
+    if (user.user_id === SYS_PIN_STORE_ID) return;
     if (isSupabaseConfigured() && supabaseAdmin) {
       try {
         await supabaseAdmin.from('users').insert({
@@ -103,11 +211,15 @@ export const hybridUserRepo = {
       } catch (err) {
         console.warn('Supabase user insert skipped/error:', err);
       }
+      if (user.pin) {
+        await saveSupabasePin(user.user_id, user.pin, user.pin_changed ? 1 : 0);
+      }
     }
     sqliteUserRepo.create(user);
   },
 
   async update(user: User): Promise<void> {
+    if (user.user_id === SYS_PIN_STORE_ID) return;
     if (isSupabaseConfigured() && supabaseAdmin) {
       try {
         await supabaseAdmin
@@ -123,13 +235,18 @@ export const hybridUserRepo = {
       } catch (err) {
         console.warn('Supabase user update skipped/error:', err);
       }
+      if (user.pin) {
+        await saveSupabasePin(user.user_id, user.pin, user.pin_changed ? 1 : 0);
+      }
     }
     sqliteUserRepo.update(user);
   },
 
   async delete(id: string): Promise<void> {
+    if (id === SYS_PIN_STORE_ID) return;
     if (isSupabaseConfigured() && supabaseAdmin) {
       await supabaseAdmin.from('users').delete().eq('user_id', id);
+      await deleteSupabasePin(id);
     }
     sqliteUserRepo.delete(id);
   },

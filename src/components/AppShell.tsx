@@ -108,7 +108,12 @@ export default function AppShell({ children, activeMenu }: AppShellProps) {
       const res = await fetch('/api/auth/update-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: newPinInput, confirm_pin: confirmPinInput }),
+        body: JSON.stringify({
+          pin: newPinInput,
+          confirm_pin: confirmPinInput,
+          user_id: currentUser?.user_id,
+          email: currentUser?.email,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
